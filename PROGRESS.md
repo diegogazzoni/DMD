@@ -148,3 +148,21 @@
   - 2000 step, dt=0.002 ps
 - **Risultati:** temperatura entro 10% del target, densità convergente verso liquido Ar
 - **Stato:** 17/17 test passano (13 unit + 4 integration)
+
+### 2026-06-16 — Python API Layer (Fase 6)
+
+- **pybind11 module** `python/dmd/core.cpp` → `_dmd_core.cpython-314-darwin.so`
+  - `SimulationConfig` binding with scalar fields + numpy array properties (mass, charges, positions, velocities, atom_types, LJ params, bond params)
+  - `EngineWrapper` class with `run()`, `current_step`, `current_time`, `positions`, `velocities`, `potential_energy` (as numpy arrays)
+  - Free functions: `read_dmdin`, `write_dmdin`, `apply_json_config`, `generate_config_template`, `build_cfg`
+- **Python package** `python/dmd/`:
+  - `__init__.py` — public API exports
+  - `system.py` — `SystemBuilder` class (system.json → SimulationConfig)
+  - `runner.py` — `run()` orchestrator (system.json/config.json → Engine)
+  - `convert/pdb.py` — PDB parser
+  - `convert/psf.py` — PSF parser (bonds, angles, dihedrals, impropers)
+  - `convert/gro.py` — GRO parser
+  - `convert/__init__.py` — re-exports
+- `pyproject.toml` for pip install
+- **CMakeLists.txt** builds `_dmd_core.so` into `python/dmd/`
+- **Stato:** 20/20 test C++ passano + Python bindings verificati manualmente (build, import, config, system, run)

@@ -39,6 +39,7 @@ endif()
 
 # ----- Subdirectories -----
 add_subdirectory(src)
+add_subdirectory(python)
 
 if(DMD_BUILD_TESTS)
     enable_testing()
