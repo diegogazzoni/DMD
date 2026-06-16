@@ -1,0 +1,15 @@
+add_executable(test_harmonic_bond test_harmonic_bond.cpp)
+target_link_libraries(test_harmonic_bond PRIVATE dmd_force gtest_main)
+add_test(NAME test_harmonic_bond COMMAND test_harmonic_bond)
+
+add_executable(test_lennard_jones test_lennard_jones.cpp)
+target_link_libraries(test_lennard_jones PRIVATE dmd_force gtest_main)
+add_test(NAME test_lennard_jones COMMAND test_lennard_jones)
+
+add_executable(test_coulomb test_coulomb.cpp)
+target_link_libraries(test_coulomb PRIVATE dmd_force gtest_main)
+add_test(NAME test_coulomb COMMAND test_coulomb)
+
+add_executable(test_force_engine test_force_engine.cpp)
+target_link_libraries(test_force_engine PRIVATE dmd_force gtest_main)
+add_test(NAME test_force_engine COMMAND test_force_engine)

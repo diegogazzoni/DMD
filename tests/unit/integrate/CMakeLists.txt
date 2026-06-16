@@ -1,0 +1,3 @@
+add_executable(test_integrator test_integrator.cpp)
+target_link_libraries(test_integrator PRIVATE dmd_integrate gtest_main)
+add_test(NAME test_integrator COMMAND test_integrator)

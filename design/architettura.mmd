@@ -1,0 +1,138 @@
+%% DMD — Diagrammi architetturali
+%% ===============================
+%% 1. Layer architecture
+%% 2. Force Engine internals
+%% 3. Data flow
+
+---
+title: Layer Architecture
+---
+
+graph TD
+    subgraph API["API Layer"]
+        PythonSDK["Python SDK"]
+        REST["REST API"]
+        CLI["CLI"]
+    end
+
+    subgraph SimulationEngine["Simulation Engine"]
+        Integrator["Integrator"]
+        EnsembleController["EnsembleController"]
+        MDLoop["MD Loop orchestrator"]
+    end
+
+    subgraph ModuleRegistry["Module Registry"]
+        ForceFieldPlugin["ForceFieldPlugin\n(parametrize)"]
+        SimulationModule["SimulationModule\n(hooks: pre/post force,\npost step)"]
+    end
+
+    subgraph ForceEngine["Force Engine"]
+        FE["ForceEngine\n(orchestrator)"]
+        Components["ForceComponents\n(bonded, non-bonded,\nlong-range, constraints)"]
+        Backend["ForceEngineBackend\n(CPU / CUDA / Metal / OpenCL)"]
+    end
+
+    subgraph SystemLayer["System Layer"]
+        JSONParser["parser JSON"]
+        BinaryCompiler["compilatore binario"]
+        Cell["Cell\n(ortorombica/esagonale/\ntriclina/dodecaedro)"]
+        IO["I/O\n(H5MD, checkpoint)"]
+    end
+
+    API --> SimulationEngine
+    SimulationEngine --> ModuleRegistry
+    ModuleRegistry --> ForceEngine
+    ForceEngine --> SystemLayer
+
+    style API fill:#e1f5fe
+    style SimulationEngine fill:#fff3e0
+    style ModuleRegistry fill:#f3e5f5
+    style ForceEngine fill:#e8f5e9
+    style SystemLayer fill:#ffebee
+
+---
+title: Force Engine Internals
+---
+
+graph LR
+    subgraph SystemData["SystemData (centralizzato)"]
+        Pos["pos_x, pos_y, pos_z"]
+        Vel["vel_x, vel_y, vel_z"]
+        Forces["forces_x, forces_y, forces_z"]
+        Masses["masses, charges, atom_types"]
+        Energy["potential_energy\n+ component_energies[8]"]
+    end
+
+    subgraph Components["ForceComponents"]
+        Bond["HarmonicBond\n(i, j, k, r0)"]
+        Angle["HarmonicAngle\n(i, j, k, k_theta, theta0)"]
+        Dihedral["PeriodicDihedral\n(i, j, k, l, k_phi, phi0, n)"]
+        LJ["LennardJones\n(sigma, epsilon\nlookup table)"]
+        Coul["CoulombDirect\n(cariche, cutoff)"]
+        PME["CoulombPME\n(griglia 3D, FFTW)"]
+        Ext["ExternalForce\n(da SimulationModule)"]
+        Constraints["Constraints\n(SHAKE/RATTLE)"]
+    end
+
+    subgraph Backend["Backend Strategy"]
+        CPU["CPUBackend"]
+        CUDA["CUDABackend"]
+        Metal["MetalBackend"]
+        OpenCL["OpenCLBackend"]
+    end
+
+    subgraph Orchestrator["ForceEngine.compute()"]
+        Order["Ordine fisso:\n1→2→3→(4+5)→6→7\n--- integratore ---\n8"]
+    end
+
+    Orchestrator --> Components
+    Components --> SystemData
+    Orchestrator --> Backend
+    Backend --> Components
+
+    PME --> FFTW["FFTW (CPU)\ncuFFT (GPU)"]
+    LJ -.-> PairList["Verlet list\n(rigenerata ogni N step)"]
+    Coul -.-> PairList
+
+    style SystemData fill:#e8f5e9
+    style Components fill:#fff3e0
+    style Backend fill:#f3e5f5
+    style Orchestrator fill:#e1f5fe
+
+---
+title: Data Flow
+---
+
+graph LR
+    Input["system.json"] --> Schema["JSON Schema\n(msys.schema.json)\n— validazione forma"]
+
+    Schema -->|pass| Pydantic["Pydantic\n— validazione semantica\n(plugin esiste, indici\n atomici validi, ...)"]
+
+    Pydantic -->|pass| RawSystem["RawSystem\n(in memoria)"]
+
+    RawSystem --> ForceFieldPlugin["ForceFieldPlugin\n.parametrize(RawSystem)"]
+
+    ForceFieldPlugin --> ParametrizedSystem["ParametrizedSystem\n(array SoA risolti:\nk, r0, sigma, epsilon,\ncariche, lookup table, ...)"]
+
+    ParametrizedSystem --> SystemData["SystemData\n(pos, vel, forces)"]
+
+    subgraph MDRun["MD Loop (N steps)"]
+        Compute["ForceEngine.compute()\n→ forces_out + energy"] --> Integrate["Integrator.step()\n→ pos, vel aggiornate"]
+        Integrate --> Constraints["Constraints\n→ pos/vel corrette"]
+        Constraints -->|next step| Sample["EnsambleController\n(termostato/barostato)"]
+        Sample --> Compute
+    end
+
+    SystemData --> Compute
+
+    Compute --> Output1["forces_out\n(accumulato)\n+ component_energies"]
+    Integrate --> Output2["trajectory.h5md\n(periodico)"]
+
+    SystemData -->|checkpoint periodico| Checkpoint["checkpoint.json\n(autocontenuto:\ntopologia + stato)"]
+
+    Checkpoint -.->|restart| SystemData
+
+    style Input fill:#fff9c4
+    style MDRun fill:#e8f5e9
+    style Checkpoint fill:#ffebee
+    style Output2 fill:#e1f5fe
