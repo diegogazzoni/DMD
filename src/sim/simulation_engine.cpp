@@ -163,8 +163,10 @@ SimulationEngine build_simulation(const SimulationConfig& cfg) {
     sys.vel_y.assign(cfg.vel_y.begin(), cfg.vel_y.end());
     sys.vel_z.assign(cfg.vel_z.begin(), cfg.vel_z.end());
 
-    std::vector<int> types(n, 0);
-    sys.atom_types = types;
+    sys.atom_types = cfg.atom_types;
+    if (sys.atom_types.empty()) {
+        sys.atom_types.assign(n, 0);
+    }
 
     if (lj_ptr) {
         lj_ptr->set_atom_types(sys.atom_types);

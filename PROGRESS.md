@@ -2,16 +2,17 @@
 
 ## Stato attuale
 - **Fase corrente:** Fase 1/2 — Core C++ (CPU)
-- **Ultimo gate superato:** **Gate NPT cycle**
-- **Ultima feature completata:** NPT Berendsen integration test su Argon liquido
+- **Ultimo gate superato:** **dmdin binary I/O**
+- **Ultima feature completata:** dmdin format + reader/writer + JSON config
 
 ## Milestones
 - [x] **Gate Argon NVE** — simulazione Argon 256 atomi, 5000 step, energia conservata (drift < 0.5%)
 - [x] **Gate checkpoint/restart** — restart produce traiettorie identiche (bit-exact)
 - [x] **Gate termostati/barostati** — 3 termostati + 2 barostati, testati singolarmente
 - [x] **Gate NPT cycle** — ciclo NPT (Berendsen T+P) su Argon 108 atomi, T=120K, P=100 bar
-- [ ] **I/O PDB/GRO** — lettura/scrittura topology e coordinate
-- [ ] **Produzione** — run completo con output traiettoria ed energia
+- [x] **dmdin binary I/O** — formato binario input + JSON config reader
+- [ ] **H5MD trajectory output** — scrittura traiettorie in formato H5MD
+- [ ] **Produzione** — run completo da file .dmdin a traiettoria
 
 ---
 
@@ -92,6 +93,21 @@
 - **Costanti fisiche:** `core/constants.h` con KB, PI
 - **Nuove directory:** `src/thermostat/`, `src/barostat/`, `tests/unit/thermostat/`, `tests/unit/barostat/`
 - **Stato:** 16/16 test passano (13 unit + 3 integration)
+
+### 2026-06-16 — dmdin binary format + reader/writer (System Layer input)
+
+- **Formato dmdin:** formato binario per input sistema (magic 0x444D444E, version 1)
+  - Header 120B: MAGIC·VERSION·n_atoms·cell_type·n_types·pos_flags·offset_ff·offset_pos·box[9]
+  - System section: per-type masses/charges
+  - FF section: LJ params, bonded terms (bonds, angles, dihedrals)
+  - Positions section: pos/vel (float→double), atom_types (int32)
+- **Funzioni:** `read_dmdin(path)` → cfg, `write_dmdin(path, cfg)`, `apply_json_config(cfg, json)`
+- **JSON config:** parametri runtime (dt, n_steps, cutoff) via nlohmann/json (FetchContent)
+- **SimulationConfig:** aggiunto `atom_types` per-atomo
+- **build_simulation:** ora usa `cfg.atom_types` se presente
+- **Nuova dipendenza:** nlohmann/json v3.11.3 (header-only)
+- **Nuovo modulo:** `src/sysbin/` + `tests/unit/sysbin/`
+- **Stato:** 18/18 test passano (14 unit + 4 integration)
 
 ### 2026-06-16 — Gate NPT cycle (Berendsen T+P su Argon liquido)
 

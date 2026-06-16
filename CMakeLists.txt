@@ -12,8 +12,16 @@ option(DMD_BUILD_TESTS "Build unit tests" ON)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FFTW REQUIRED IMPORTED_TARGET fftw3)
 
+include(FetchContent)
+
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.11.3
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 if(DMD_BUILD_TESTS)
-    include(FetchContent)
     FetchContent_Declare(
         googletest
         GIT_REPOSITORY https://github.com/google/googletest.git

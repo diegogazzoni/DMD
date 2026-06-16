@@ -19,6 +19,7 @@ struct SimulationConfig {
     std::vector<double> charges;
     std::vector<double> pos_x, pos_y, pos_z;
     std::vector<double> vel_x, vel_y, vel_z;
+    std::vector<int> atom_types;
 
     LennardJonesParams lj;
     double lj_cutoff{1.2};
