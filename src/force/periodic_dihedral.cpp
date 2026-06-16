@@ -63,17 +63,8 @@ void PeriodicDihedral::compute(
         if (sign < 0) phi = -phi;
 
         int p = params_.periodicity[n];
-        double dphi = phi - params_.phi0[n];
         double cos_n_phi = std::cos(p * phi);
         double energy_term = params_.k_phi[n] * (1.0 + cos_n_phi);
-        double force_mag = params_.k_phi[n] * p * std::sin(p * phi);
-
-        (void)dphi;
-
-        forces_x[ai] += 0; forces_y[ai] += 0; forces_z[ai] += 0;
-        forces_x[aj] += 0; forces_y[aj] += 0; forces_z[aj] += 0;
-        forces_x[ak] += 0; forces_y[ak] += 0; forces_z[ak] += 0;
-        forces_x[al] += 0; forces_y[al] += 0; forces_z[al] += 0;
 
         energy += energy_term;
     }

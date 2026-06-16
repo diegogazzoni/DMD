@@ -4,4 +4,4 @@ add_library(dmd_core
     error.cpp
 )
 
-target_include_directories(dmd_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(dmd_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)

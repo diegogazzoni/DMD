@@ -40,8 +40,8 @@ void Cell::minimum_image(double dx, double dy, double dz,
 void Cell::wrap(double& x, double& y, double& z) const noexcept {
     if (type == CellType::orthorhombic) {
         x -= std::floor(x / matrix[0]) * matrix[0];
-        y -= std::floor(y / matrix[1]) * matrix[4];
-        z -= std::floor(z / matrix[2]) * matrix[8];
+        y -= std::floor(y / matrix[4]) * matrix[4];
+        z -= std::floor(z / matrix[8]) * matrix[8];
     }
 }
 

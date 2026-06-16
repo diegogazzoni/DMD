@@ -25,6 +25,7 @@ public:
         double& energy_out
     ) override;
 
+    void set_atom_types(std::span<const int> types);
     void rebuild_pair_list(
         std::span<const double> pos_x,
         std::span<const double> pos_y,
@@ -37,6 +38,7 @@ private:
     double cutoff_;
     double cutoff2_;
     std::vector<int> pairs_i_, pairs_j_;
+    std::vector<int> atom_types_;
     int rebuild_interval_;
     int step_since_rebuild_;
 };

@@ -73,12 +73,12 @@ void CoulombDirect::compute(
         double erfc_ar = std::erfc(alpha * r);
         double force_scalar = k_e * qiqj * (erfc_ar / (r2 * r) + 2.0 * alpha * std::exp(-alpha * alpha * r2) / (std::sqrt(M_PI) * r2));
 
-        forces_x[i] += force_scalar * dx;
-        forces_y[i] += force_scalar * dy;
-        forces_z[i] += force_scalar * dz;
-        forces_x[j] -= force_scalar * dx;
-        forces_y[j] -= force_scalar * dy;
-        forces_z[j] -= force_scalar * dz;
+        forces_x[i] -= force_scalar * dx;
+        forces_y[i] -= force_scalar * dy;
+        forces_z[i] -= force_scalar * dz;
+        forces_x[j] += force_scalar * dx;
+        forces_y[j] += force_scalar * dy;
+        forces_z[j] += force_scalar * dz;
 
         energy += k_e * qiqj * erfc_ar / r;
     }

@@ -9,6 +9,10 @@ LennardJones::LennardJones(LennardJonesParams params, double cutoff)
     , rebuild_interval_(10)
     , step_since_rebuild_(0) {}
 
+void LennardJones::set_atom_types(std::span<const int> types) {
+    atom_types_.assign(types.begin(), types.end());
+}
+
 std::string LennardJones::name() const { return "LennardJones"; }
 
 void LennardJones::rebuild_pair_list(
@@ -63,8 +67,8 @@ void LennardJones::compute(
         double r2 = dx*dx + dy*dy + dz*dz;
         if (r2 >= cutoff2_) continue;
 
-        int ti = atom_types[i];
-        int tj = atom_types[j];
+        int ti = atom_types_[i];
+        int tj = atom_types_[j];
         double eps = params_.epsilon[ti * params_.n_types + tj];
         double sig = params_.sigma[ti * params_.n_types + tj];
 

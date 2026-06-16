@@ -10,19 +10,19 @@ TEST(LennardJonesTest, TwoAtoms) {
     params.sigma = {0.3, 0.3, 0.3, 0.3}; // [1][1] row-major = 0.336*0.336=0.112...
     params.epsilon = {0.5, 0.5, 0.5, 0.5}; // 1.0 kJ/mol
 
-    double sig = 0.3;
-    double eps = 0.5;
-    params.sigma = {sig * sig};
-    params.epsilon = {eps};
+    params.sigma = {0.3};
+    params.epsilon = {0.5};
     params.n_types = 1;
 
     LennardJones lj(std::move(params), 2.0);
 
     SystemData sys(2);
     sys.pos_x[0] = 0.0; sys.pos_y[0] = 0.0; sys.pos_z[0] = 0.0;
-    sys.pos_x[1] = sig; sys.pos_y[1] = 0.0; sys.pos_z[1] = 0.0;
+    sys.pos_x[1] = 0.3; sys.pos_y[1] = 0.0; sys.pos_z[1] = 0.0;
     sys.atom_types[0] = 0;
     sys.atom_types[1] = 0;
+
+    lj.set_atom_types(sys.atom_types);
 
     Cell cell(10.0, 10.0, 10.0);
     lj.rebuild_pair_list(sys.x(), sys.y(), sys.z(), cell);
@@ -46,6 +46,8 @@ TEST(LennardJonesTest, TwoAtomsRepulsive) {
     sys.pos_x[1] = 0.2; sys.pos_y[1] = 0.0; sys.pos_z[1] = 0.0;
     sys.atom_types[0] = 0;
     sys.atom_types[1] = 0;
+
+    lj.set_atom_types(sys.atom_types);
 
     Cell cell(10.0, 10.0, 10.0);
     lj.rebuild_pair_list(sys.x(), sys.y(), sys.z(), cell);

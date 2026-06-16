@@ -1,13 +1,9 @@
 #pragma once
 
-#include <span>
-
 struct SystemData;
 
 class Integrator {
 public:
-    void step(
-        SystemData& sys,
-        double dt
-    );
+    void half_kick(SystemData& sys, double dt);
+    void advance(SystemData& sys, double dt);
 };

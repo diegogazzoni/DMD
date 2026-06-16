@@ -48,6 +48,6 @@ TEST(CoulombDirectTest, OppositeChargesAttractive) {
     coulomb.compute(sys.x(), sys.y(), sys.z(), cell, sys.fx(), sys.fy(), sys.fz(), energy);
 
     EXPECT_LT(energy, 0.0);
-    EXPECT_GT(sys.forces_x[0], 0.0); // repelled toward center
     EXPECT_LT(sys.forces_x[1], 0.0);
+    EXPECT_GT(sys.forces_x[0], 0.0);
 }

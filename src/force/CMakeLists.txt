@@ -9,5 +9,5 @@ add_library(dmd_force
     force_engine.cpp
 )
 
-target_include_directories(dmd_force PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(dmd_force PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(dmd_force PUBLIC dmd_core)

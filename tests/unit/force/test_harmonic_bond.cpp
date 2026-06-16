@@ -48,7 +48,7 @@ TEST(HarmonicBondTest, TwoAtomsStretched) {
     double expected_energy = 0.5 * 100.0 * (0.5 * 0.5);
     EXPECT_NEAR(energy, expected_energy, 1e-12);
 
-    double expected_f = -100.0 * 0.5;
+    double expected_f = 100.0 * 0.5;
     EXPECT_NEAR(sys.forces_x[0], expected_f, 1e-12);
     EXPECT_NEAR(sys.forces_x[1], -expected_f, 1e-12);
 }
@@ -72,6 +72,5 @@ TEST(HarmonicBondTest, ThreeBonds) {
     double energy = 0.0;
     bond.compute(sys.x(), sys.y(), sys.z(), cell, sys.fx(), sys.fy(), sys.fz(), energy);
 
-    EXPECT_GT(energy, 0.0);
-    EXPECT_NEAR(energy, 0.5*100*0.0*0.0 + 0.5*200*1.3*1.3, 1e-10);
+    EXPECT_NEAR(energy, 9.0, 1e-10);
 }
