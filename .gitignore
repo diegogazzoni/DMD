@@ -7,5 +7,7 @@ build/
 *.out
 
 ARCHITECTURE.md
+PROGRESS.md
+
 .opencode/*
 design/*
