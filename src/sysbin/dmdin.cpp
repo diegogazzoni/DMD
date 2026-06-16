@@ -3,10 +3,7 @@
 #include <fstream>
 #include <vector>
 #include <cstdint>
-#include <nlohmann/json.hpp>
 #include <cmath>
-
-using json = nlohmann::json;
 
 static constexpr uint32_t DMDIN_MAGIC = 0x444D444E;
 static constexpr uint32_t DMDIN_VERSION = 1;
@@ -309,26 +306,4 @@ void write_dmdin(const std::string& path, const SimulationConfig& cfg) {
     // patch offset_pos in header
     os.seekp(offsetof(DMDinHeader, offset_pos));
     os.write(reinterpret_cast<const char*>(&header.offset_pos), sizeof(header.offset_pos));
-}
-
-// ---- JSON config ----
-
-void apply_json_config(SimulationConfig& cfg, const std::string& json_path) {
-    std::ifstream is(json_path);
-    if (!is) throw std::runtime_error("Cannot open " + json_path);
-    json j;
-    is >> j;
-
-    if (j.contains("dt")) cfg.dt = j["dt"].get<double>();
-    if (j.contains("n_steps")) cfg.n_steps = j["n_steps"].get<int>();
-    if (j.contains("lj_cutoff")) {
-        cfg.lj_cutoff = j["lj_cutoff"].get<double>();
-        cfg.use_lj = true;
-    }
-    if (j.contains("checkpoint_interval"))
-        cfg.checkpoint_interval = j["checkpoint_interval"].get<int>();
-    if (j.contains("checkpoint_path"))
-        cfg.checkpoint_path = j["checkpoint_path"].get<std::string>();
-    if (j.contains("trajectory_interval"))
-        cfg.trajectory_interval = j["trajectory_interval"].get<int>();
 }

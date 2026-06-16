@@ -9,3 +9,8 @@ add_test(NAME test_checkpoint_restart COMMAND test_checkpoint_restart)
 add_executable(test_npt_berendsen test_npt_berendsen.cpp)
 target_link_libraries(test_npt_berendsen PRIVATE dmd_sim dmd_force dmd_integrate gtest_main)
 add_test(NAME test_npt_berendsen COMMAND test_npt_berendsen)
+
+add_executable(test_production test_production.cpp)
+target_link_libraries(test_production PRIVATE dmd_sim dmd_sysbin dmd_force dmd_integrate dmd_trajectory ${HDF5_C_LIBRARIES} GTest::gtest GTest::gtest_main)
+target_include_directories(test_production PRIVATE ${HDF5_C_INCLUDE_DIRS})
+add_test(NAME test_production COMMAND test_production)

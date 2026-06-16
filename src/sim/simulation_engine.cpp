@@ -1,13 +1,22 @@
 #include "simulation_engine.h"
 #include "simulation_config.h"
+#include "core/constants.h"
 #include "force/force_engine.h"
 #include "force/force_component.h"
 #include "force/lennard_jones.h"
+#include "force/coulomb_direct.h"
+#include "force/coulomb_pme.h"
 #include "thermostat/thermostat.h"
+#include "thermostat/berendsen.h"
+#include "thermostat/nose_hoover.h"
+#include "thermostat/andersen.h"
 #include "barostat/barostat.h"
+#include "barostat/berendsen_barostat.h"
+#include "barostat/andersen_barostat.h"
 #include "checkpoint.h"
 #include "trajectory/h5md_writer.h"
 #include <fstream>
+#include <random>
 #include <vector>
 
 SimulationEngine::SimulationEngine(
@@ -145,7 +154,66 @@ std::unique_ptr<ForceEngine> build_force_engine(const SimulationConfig& cfg) {
         fe->add_component(std::make_unique<PeriodicDihedral>(d));
     }
 
+    if (cfg.coulomb_type == "direct" || cfg.coulomb_type == "cutoff") {
+        CoulombDirectParams p;
+        p.cutoff = cfg.coulomb_cutoff;
+        p.ewald_coefficient = cfg.ewald_coeff;
+        fe->add_component(std::make_unique<CoulombDirect>(p));
+    } else if (cfg.coulomb_type == "pme") {
+        PMEParams p;
+        p.cutoff = cfg.coulomb_cutoff;
+        p.ewald_coefficient = cfg.ewald_coeff;
+        p.spline_order = cfg.pme_order;
+        p.nx = std::max(8, static_cast<int>(cfg.box_size / cfg.pme_grid_spacing + 0.5));
+        p.ny = p.nx;
+        p.nz = p.nx;
+        fe->add_component(std::make_unique<CoulombPME>(p));
+    }
+
     return fe;
+}
+
+static std::unique_ptr<Thermostat> make_thermostat(const SimulationConfig& cfg, size_t n_atoms) {
+    auto& t = cfg.thermostat;
+    if (t.type == "none") return nullptr;
+    if (t.type == "berendsen") {
+        BerendsenParams p;
+        p.temperature = t.temperature;
+        p.tau = t.tau;
+        return std::make_unique<BerendsenThermostat>(p);
+    }
+    if (t.type == "nose-hoover") {
+        NoseHooverParams p;
+        p.temperature = t.temperature;
+        p.tau = t.tau;
+        return std::make_unique<NoseHooverThermostat>(p, n_atoms);
+    }
+    if (t.type == "andersen") {
+        AndersenParams p;
+        p.temperature = t.temperature;
+        p.frequency = t.frequency;
+        return std::make_unique<AndersenThermostat>(p);
+    }
+    throw std::runtime_error("Unknown thermostat type: " + t.type);
+}
+
+static std::unique_ptr<Barostat> make_barostat(const SimulationConfig& cfg, size_t n_atoms) {
+    auto& b = cfg.barostat;
+    if (b.type == "none") return nullptr;
+    if (b.type == "berendsen") {
+        BerendsenBarostatParams p;
+        p.pressure = b.pressure;
+        p.tau = b.tau;
+        p.compressibility = b.compressibility;
+        return std::make_unique<BerendsenBarostat>(p);
+    }
+    if (b.type == "andersen") {
+        AndersenBarostatParams p;
+        p.pressure = b.pressure;
+        p.tau = b.tau;
+        return std::make_unique<AndersenBarostat>(p, n_atoms);
+    }
+    throw std::runtime_error("Unknown barostat type: " + b.type);
 }
 
 SimulationEngine build_simulation(const SimulationConfig& cfg) {
@@ -158,18 +226,36 @@ SimulationEngine build_simulation(const SimulationConfig& cfg) {
         return nullptr;
     }();
 
+    // Set charges on Coulomb components before moving fe
+    auto* coulomb_direct = [&]() -> CoulombDirect* {
+        for (auto& c : fe->components()) {
+            if (auto* cd = dynamic_cast<CoulombDirect*>(c.get())) return cd;
+        }
+        return nullptr;
+    }();
+    auto* coulomb_pme = [&]() -> CoulombPME* {
+        for (auto& c : fe->components()) {
+            if (auto* cp = dynamic_cast<CoulombPME*>(c.get())) return cp;
+        }
+        return nullptr;
+    }();
+
     Cell cell(cfg.box_size, cfg.box_size, cfg.box_size);
 
     size_t n = cfg.pos_x.size();
     SimulationEngine::Config engine_cfg;
     engine_cfg.dt = cfg.dt;
     engine_cfg.n_steps = cfg.n_steps;
-    engine_cfg.trajectory_interval = cfg.trajectory_interval;
+    engine_cfg.trajectory_interval = cfg.nstxout;
     engine_cfg.checkpoint_interval = cfg.checkpoint_interval;
     engine_cfg.trajectory_path = cfg.trajectory_path;
     engine_cfg.checkpoint_path = cfg.checkpoint_path;
 
-    SimulationEngine engine(std::move(fe), cell, n, engine_cfg);
+    auto thermo = make_thermostat(cfg, n);
+    auto baro = make_barostat(cfg, n);
+
+    SimulationEngine engine(std::move(fe), cell, n, engine_cfg,
+                            std::move(thermo), std::move(baro));
     auto& sys = engine.system();
 
     sys.masses.assign(cfg.masses.begin(), cfg.masses.end());
@@ -188,6 +274,59 @@ SimulationEngine build_simulation(const SimulationConfig& cfg) {
 
     if (lj_ptr) {
         lj_ptr->set_atom_types(sys.atom_types);
+    }
+    if (coulomb_direct) {
+        coulomb_direct->set_charges(sys.charges);
+    }
+    if (coulomb_pme) {
+        coulomb_pme->set_charges(sys.charges);
+    }
+
+    // Generate velocities if requested
+    if (cfg.gen_vel && n > 0) {
+        std::mt19937 rng(cfg.seed);
+        std::normal_distribution<double> normal(0.0, 1.0);
+        double kBT = dmd_constants::KB * cfg.init_temperature;
+        for (size_t i = 0; i < n; ++i) {
+            double sigma = std::sqrt(kBT / sys.masses[i]);
+            sys.vel_x[i] = normal(rng) * sigma;
+            sys.vel_y[i] = normal(rng) * sigma;
+            sys.vel_z[i] = normal(rng) * sigma;
+        }
+        // Remove center-of-mass momentum
+        double com_vx = 0, com_vy = 0, com_vz = 0;
+        double total_mass = 0;
+        for (size_t i = 0; i < n; ++i) {
+            com_vx += sys.masses[i] * sys.vel_x[i];
+            com_vy += sys.masses[i] * sys.vel_y[i];
+            com_vz += sys.masses[i] * sys.vel_z[i];
+            total_mass += sys.masses[i];
+        }
+        com_vx /= total_mass;
+        com_vy /= total_mass;
+        com_vz /= total_mass;
+        for (size_t i = 0; i < n; ++i) {
+            sys.vel_x[i] -= com_vx;
+            sys.vel_y[i] -= com_vy;
+            sys.vel_z[i] -= com_vz;
+        }
+        // Rescale to exact T
+        if (cfg.init_temperature > 0) {
+            double ekin = 0;
+            for (size_t i = 0; i < n; ++i) {
+                ekin += 0.5 * sys.masses[i] * (
+                    sys.vel_x[i] * sys.vel_x[i] +
+                    sys.vel_y[i] * sys.vel_y[i] +
+                    sys.vel_z[i] * sys.vel_z[i]);
+            }
+            double T_actual = temperature(ekin, sys.n_atoms);
+            double lambda = std::sqrt(cfg.init_temperature / T_actual);
+            for (size_t i = 0; i < n; ++i) {
+                sys.vel_x[i] *= lambda;
+                sys.vel_y[i] *= lambda;
+                sys.vel_z[i] *= lambda;
+            }
+        }
     }
 
     return engine;

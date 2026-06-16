@@ -36,5 +36,3 @@
 
 SimulationConfig read_dmdin(const std::string& path);
 void write_dmdin(const std::string& path, const SimulationConfig& cfg);
-
-void apply_json_config(SimulationConfig& cfg, const std::string& json_path);

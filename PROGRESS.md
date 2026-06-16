@@ -2,8 +2,8 @@
 
 ## Stato attuale
 - **Fase corrente:** Fase 1/2 — Core C++ (CPU)
-- **Ultimo gate superato:** **H5MD trajectory output**
-- **Ultima feature completata:** H5MD writer integrato in SimulationEngine
+- **Ultimo gate superato:** **Gate Produzione (end-to-end)**
+- **Ultima feature completata:** CLI + config.json strict + build_simulation orchestrator
 
 ## Milestones
 - [x] **Gate Argon NVE** — simulazione Argon 256 atomi, 5000 step, energia conservata (drift < 0.5%)
@@ -12,7 +12,8 @@
 - [x] **Gate NPT cycle** — ciclo NPT (Berendsen T+P) su Argon 108 atomi, T=120K, P=100 bar
 - [x] **dmdin binary I/O** — formato binario input + JSON config reader
 - [x] **H5MD trajectory output** — scrittura traiettorie in formato H5MD
-- [ ] **Produzione** — run completo da file .dmdin a traiettoria H5MD
+- [x] **Produzione** — run completo da file .dmdin + config.json a traiettoria H5MD
+- [ ] **Fase 1: Core C++ completata**
 
 ---
 
@@ -122,6 +123,22 @@
 - **Nuova dipendenza:** HDF5 2.1.1 (Homebrew, via `find_package(HDF5 COMPONENTS C)`)
 - **Nuovo modulo:** `src/trajectory/` + `tests/unit/trajectory/`
 - **Stato:** 19/19 test passano (15 unit + 4 integration)
+
+### 2026-06-16 — Gate Produzione (end-to-end: .dmdin + config.json → H5MD)
+
+- **SimulationConfig esteso:**
+  - `ThermostatConfig` + `BarostatConfig` struct per coupling params
+  - `nstxout`, `nstvout`, `nstenergy` separati (→ sostituisce `trajectory_interval`)
+  - `energy_path`, `constraint_type`, `constraint_tolerance`, `init_temperature`, `gen_vel`, `seed`
+  - `coulomb_type`, `coulomb_cutoff`, `pme_order`, `pme_grid_spacing`, `ewald_coeff`
+- **JSON config strict:** `src/sim/json_config.h/.cpp`
+  - Validazione contro schema: tutte le chiavi richieste, chiavi sconosciute → errore
+  - `generate_config_template()` per `dmd config --template`
+- **build_force_engine:** ora crea CoulombDirect/PME in base a `coulomb_type`
+- **build_simulation:** crea termostato/barostato da config + genera velocità Maxwell-Boltzmann se `gen_vel=true`
+- **CLI:** `src/main/main.cpp` — `dmd run <system.dmdin> <config.json>` + `dmd config --template`
+- **Gate Produzione:** `tests/integration/test_production.cpp` — Ar FCC, write dmdin + config.json → read → run → verifica H5MD
+- **Stato:** 20/20 test passano (15 unit + 5 integration)
 
 ### 2026-06-16 — Gate NPT cycle (Berendsen T+P su Argon liquido)
 
