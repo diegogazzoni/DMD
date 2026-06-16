@@ -9,5 +9,6 @@ build/
 ARCHITECTURE.md
 PROGRESS.md
 
+session*
 .opencode/*
 design/*
