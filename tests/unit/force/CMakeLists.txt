@@ -10,6 +10,14 @@ add_executable(test_coulomb test_coulomb.cpp)
 target_link_libraries(test_coulomb PRIVATE dmd_force gtest_main)
 add_test(NAME test_coulomb COMMAND test_coulomb)
 
+add_executable(test_harmonic_angle test_harmonic_angle.cpp)
+target_link_libraries(test_harmonic_angle PRIVATE dmd_force gtest_main)
+add_test(NAME test_harmonic_angle COMMAND test_harmonic_angle)
+
+add_executable(test_periodic_dihedral test_periodic_dihedral.cpp)
+target_link_libraries(test_periodic_dihedral PRIVATE dmd_force gtest_main)
+add_test(NAME test_periodic_dihedral COMMAND test_periodic_dihedral)
+
 add_executable(test_force_engine test_force_engine.cpp)
 target_link_libraries(test_force_engine PRIVATE dmd_force gtest_main)
 add_test(NAME test_force_engine COMMAND test_force_engine)

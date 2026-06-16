@@ -1,3 +1,7 @@
 add_executable(test_integrator test_integrator.cpp)
 target_link_libraries(test_integrator PRIVATE dmd_integrate gtest_main)
 add_test(NAME test_integrator COMMAND test_integrator)
+
+add_executable(test_constraints test_constraints.cpp)
+target_link_libraries(test_constraints PRIVATE dmd_integrate gtest_main)
+add_test(NAME test_constraints COMMAND test_constraints)
