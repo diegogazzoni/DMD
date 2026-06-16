@@ -1,0 +1,54 @@
+#pragma once
+
+#include "integrate/integrator.h"
+#include "core/cell.h"
+#include "core/system_data.h"
+#include <memory>
+#include <string>
+
+class ForceComponent;
+class ForceEngine;
+
+class SimulationEngine {
+public:
+    struct Config {
+        double dt{0.002};
+        int n_steps{1000};
+        int trajectory_interval{100};
+        int checkpoint_interval{500};
+        std::string checkpoint_path{"checkpoint.bin"};
+    };
+
+    SimulationEngine(std::unique_ptr<ForceEngine> fe, Cell cell, size_t n_atoms, Config config);
+    ~SimulationEngine();
+
+    SimulationEngine(const SimulationEngine&) = delete;
+    SimulationEngine& operator=(const SimulationEngine&) = delete;
+    SimulationEngine(SimulationEngine&&) noexcept = default;
+    SimulationEngine& operator=(SimulationEngine&&) noexcept = default;
+
+    void run();
+    void step();
+
+    int current_step() const { return step_; }
+    double current_time() const { return time_; }
+    SystemData& system() { return sys_; }
+    const SystemData& system() const { return sys_; }
+    ForceEngine& force_engine() { return *fe_; }
+
+    void save_checkpoint(const std::string& path) const;
+    void load_checkpoint(const std::string& path);
+
+private:
+    std::unique_ptr<ForceEngine> fe_;
+    Integrator integrator_;
+    Cell cell_;
+    SystemData sys_;
+    Config config_;
+    int step_{0};
+    double time_{0.0};
+    int lj_step_since_rebuild_{0};
+
+    void save_frame();
+    int find_lj_component() const;
+};

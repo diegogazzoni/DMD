@@ -17,6 +17,10 @@ public:
 
     EnergyReport compute(SystemData& sys, const Cell& cell);
 
+    const std::vector<std::unique_ptr<ForceComponent>>& components() const {
+        return components_;
+    }
+
 private:
     std::vector<std::unique_ptr<ForceComponent>> components_;
 };

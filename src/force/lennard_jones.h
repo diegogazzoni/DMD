@@ -33,6 +33,9 @@ public:
         const Cell& cell
     );
 
+    int step_since_rebuild() const { return step_since_rebuild_; }
+    void set_step_since_rebuild(int s) { step_since_rebuild_ = s; }
+
 private:
     LennardJonesParams params_;
     double cutoff_;

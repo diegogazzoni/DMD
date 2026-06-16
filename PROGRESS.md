@@ -60,3 +60,16 @@
   - **Forze:** interpolazione dal potenziale reciproco con derivate B-spline e fattori dimensioni nx/Lx, ny/Ly, nz/Lz
 - **Test:** 6 test (B-spline, self-energy, simmetria forze, conservazione energia NVE breve)
 - **Stato:** 12/12 test passano (10 unit + 1 integration + 1 PME)
+
+### 2026-06-16 — Simulation Engine + checkpoint/restart (Gate checkpoint)
+
+- **SimulationEngine:** classe orchestrazione con `step()`, `run()`, `save_checkpoint()`, `load_checkpoint()`
+- **SimulationConfig:** struct dati + `build_simulation()` factory function
+- **Checkpoint:** formato binario (magic 0x444D4450, version 1), stato completo system + LJ Verlet
+- **ForceEngine:** esposto `components()` per serializzazione checkpoint
+- **LennardJones:** esposto `step_since_rebuild()` / `set_step_since_rebuild()` per restart deterministico
+- **Bug forces (doppio):** forze non azzerate all'inizio di `step()` causavano accumulo sul passo precedente → forze raddoppiate sulla prima chiamata `compute()`.
+- **Bug off-by-one:** `sys.step` impostato prima dell'incremento di `step()` → checkpoint salvava step-1.
+- **Gate checkpoint/restart:** restart da checkpoint produce traiettoria bit-exact (32 atomi Ar, 200 step, split 100+100)
+- **Nuovi file:** `src/sim/` (engine, config, checkpoint, CMakeLists), `tests/unit/sim/`, `tests/integration/test_checkpoint_restart.cpp`
+- **Stato:** 14/14 test passano (11 unit + 3 integration)

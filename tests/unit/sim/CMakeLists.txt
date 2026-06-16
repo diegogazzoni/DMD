@@ -1,0 +1,3 @@
+add_executable(test_simulation_engine test_simulation_engine.cpp)
+target_link_libraries(test_simulation_engine PRIVATE dmd_sim gtest_main)
+add_test(NAME test_simulation_engine COMMAND test_simulation_engine)
