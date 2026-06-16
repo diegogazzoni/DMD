@@ -1,0 +1,3 @@
+add_executable(test_argon_nve test_argon_nve.cpp)
+target_link_libraries(test_argon_nve PRIVATE dmd_force dmd_integrate gtest_main)
+add_test(NAME test_argon_nve COMMAND test_argon_nve)

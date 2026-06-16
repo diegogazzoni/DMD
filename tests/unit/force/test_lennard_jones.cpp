@@ -56,6 +56,6 @@ TEST(LennardJonesTest, TwoAtomsRepulsive) {
     lj.compute(sys.x(), sys.y(), sys.z(), cell, sys.fx(), sys.fy(), sys.fz(), energy);
 
     EXPECT_GT(energy, 0.0);
-    EXPECT_GT(sys.forces_x[0], 0.0); // repulsive: atom0 pushed away from atom1
-    EXPECT_LT(sys.forces_x[1], 0.0);
+    EXPECT_LT(sys.forces_x[0], 0.0); // repulsive: atom0 at x=0 pushed left, atom1 at x>0 pushed right
+    EXPECT_GT(sys.forces_x[1], 0.0);
 }

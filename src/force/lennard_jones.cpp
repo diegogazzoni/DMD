@@ -7,7 +7,7 @@ LennardJones::LennardJones(LennardJonesParams params, double cutoff)
     , cutoff_(cutoff)
     , cutoff2_(cutoff * cutoff)
     , rebuild_interval_(10)
-    , step_since_rebuild_(0) {}
+    , step_since_rebuild_(10) {}
 
 void LennardJones::set_atom_types(std::span<const int> types) {
     atom_types_.assign(types.begin(), types.end());
@@ -76,14 +76,14 @@ void LennardJones::compute(
         double sig6 = sig2 * sig2 * sig2;
         double r6 = r2 * r2 * r2;
         double sr6 = sig6 / r6;
-        double f_scalar = 24.0 * eps * (2.0 * sr6 * sr6 - sr6) / std::sqrt(r2);
+        double f_scalar = 24.0 * eps * (2.0 * sr6 * sr6 - sr6) / r2;
 
-        forces_x[i] += f_scalar * dx;
-        forces_y[i] += f_scalar * dy;
-        forces_z[i] += f_scalar * dz;
-        forces_x[j] -= f_scalar * dx;
-        forces_y[j] -= f_scalar * dy;
-        forces_z[j] -= f_scalar * dz;
+        forces_x[i] -= f_scalar * dx;
+        forces_y[i] -= f_scalar * dy;
+        forces_z[i] -= f_scalar * dz;
+        forces_x[j] += f_scalar * dx;
+        forces_y[j] += f_scalar * dy;
+        forces_z[j] += f_scalar * dz;
 
         energy += 4.0 * eps * (sr6 * sr6 - sr6);
     }
