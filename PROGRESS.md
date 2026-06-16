@@ -2,11 +2,15 @@
 
 ## Stato attuale
 - **Fase corrente:** Fase 1/2 — Core C++ (CPU)
-- **Ultimo gate superato:** **Gate Argon NVE**
-- **Ultima feature completata:** Integrazione test Argon NVE + fix LJ
+- **Ultimo gate superato:** **Gate checkpoint/restart**
+- **Ultima feature completata:** Simulation Engine + checkpoint/restart
 
 ## Milestones
 - [x] **Gate Argon NVE** — simulazione Argon 256 atomi, 5000 step, energia conservata (drift < 0.5%)
+- [x] **Gate checkpoint/restart** — restart produce traiettorie identiche (bit-exact)
+- [ ] **Gate NPT cycle** — termostato + barostato, ciclo NPT funzionante
+- [ ] **I/O PDB/GRO** — lettura/scrittura topology e coordinate
+- [ ] **Produzione** — run completo con output traiettoria ed energia
 
 ---
 
