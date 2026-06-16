@@ -2,14 +2,14 @@
 
 ## Stato attuale
 - **Fase corrente:** Fase 1/2 — Core C++ (CPU)
-- **Ultimo gate superato:** **Gate termostati/barostati**
-- **Ultima feature completata:** Thermostat + Barostat modules (3 termostati, 2 barostati)
+- **Ultimo gate superato:** **Gate NPT cycle**
+- **Ultima feature completata:** NPT Berendsen integration test su Argon liquido
 
 ## Milestones
 - [x] **Gate Argon NVE** — simulazione Argon 256 atomi, 5000 step, energia conservata (drift < 0.5%)
 - [x] **Gate checkpoint/restart** — restart produce traiettorie identiche (bit-exact)
 - [x] **Gate termostati/barostati** — 3 termostati + 2 barostati, testati singolarmente
-- [ ] **Gate NPT cycle** — ciclo NPT funzionante su sistema reale (es. acqua)
+- [x] **Gate NPT cycle** — ciclo NPT (Berendsen T+P) su Argon 108 atomi, T=120K, P=100 bar
 - [ ] **I/O PDB/GRO** — lettura/scrittura topology e coordinate
 - [ ] **Produzione** — run completo con output traiettoria ed energia
 
@@ -92,3 +92,12 @@
 - **Costanti fisiche:** `core/constants.h` con KB, PI
 - **Nuove directory:** `src/thermostat/`, `src/barostat/`, `tests/unit/thermostat/`, `tests/unit/barostat/`
 - **Stato:** 16/16 test passano (13 unit + 3 integration)
+
+### 2026-06-16 — Gate NPT cycle (Berendsen T+P su Argon liquido)
+
+- **Gate test:** `tests/integration/test_npt_berendsen.cpp`
+  - 108 Ar atomi FCC, densità iniziale 1.0 g/cm³
+  - Berendsen thermostat (T=120K, τ=0.1 ps) + Berendsen barostat (P=100 bar, τ=1.0 ps)
+  - 2000 step, dt=0.002 ps
+- **Risultati:** temperatura entro 10% del target, densità convergente verso liquido Ar
+- **Stato:** 17/17 test passano (13 unit + 4 integration)

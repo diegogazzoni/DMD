@@ -5,3 +5,7 @@ add_test(NAME test_argon_nve COMMAND test_argon_nve)
 add_executable(test_checkpoint_restart test_checkpoint_restart.cpp)
 target_link_libraries(test_checkpoint_restart PRIVATE dmd_sim dmd_force dmd_integrate gtest_main)
 add_test(NAME test_checkpoint_restart COMMAND test_checkpoint_restart)
+
+add_executable(test_npt_berendsen test_npt_berendsen.cpp)
+target_link_libraries(test_npt_berendsen PRIVATE dmd_sim dmd_force dmd_integrate gtest_main)
+add_test(NAME test_npt_berendsen COMMAND test_npt_berendsen)
