@@ -1,0 +1,3 @@
+add_executable(test_thermostat test_thermostat.cpp)
+target_link_libraries(test_thermostat PRIVATE dmd_thermostat gtest_main)
+add_test(NAME test_thermostat COMMAND test_thermostat)

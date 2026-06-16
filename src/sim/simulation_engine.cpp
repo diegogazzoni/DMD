@@ -3,12 +3,23 @@
 #include "force/force_engine.h"
 #include "force/force_component.h"
 #include "force/lennard_jones.h"
+#include "thermostat/thermostat.h"
+#include "barostat/barostat.h"
 #include "checkpoint.h"
 #include <fstream>
 #include <vector>
 
-SimulationEngine::SimulationEngine(std::unique_ptr<ForceEngine> fe, Cell cell, size_t n_atoms, Config config)
+SimulationEngine::SimulationEngine(
+    std::unique_ptr<ForceEngine> fe,
+    Cell cell,
+    size_t n_atoms,
+    Config config,
+    std::unique_ptr<Thermostat> thermostat,
+    std::unique_ptr<Barostat> barostat
+)
     : fe_(std::move(fe))
+    , thermostat_(std::move(thermostat))
+    , barostat_(std::move(barostat))
     , cell_(cell)
     , sys_(n_atoms)
     , config_(std::move(config))
@@ -16,6 +27,14 @@ SimulationEngine::SimulationEngine(std::unique_ptr<ForceEngine> fe, Cell cell, s
 }
 
 SimulationEngine::~SimulationEngine() = default;
+
+void SimulationEngine::set_thermostat(std::unique_ptr<Thermostat> t) {
+    thermostat_ = std::move(t);
+}
+
+void SimulationEngine::set_barostat(std::unique_ptr<Barostat> b) {
+    barostat_ = std::move(b);
+}
 
 void SimulationEngine::step() {
     sys_.step = step_;
@@ -39,6 +58,9 @@ void SimulationEngine::step() {
     fe_->compute(sys_, cell_);
 
     integrator_.half_kick(sys_, config_.dt);
+
+    if (thermostat_) thermostat_->apply(sys_, config_.dt);
+    if (barostat_) barostat_->apply(sys_, cell_, config_.dt);
 
     ++step_;
     sys_.step = step_;

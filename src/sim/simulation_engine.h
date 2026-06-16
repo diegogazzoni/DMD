@@ -8,6 +8,8 @@
 
 class ForceComponent;
 class ForceEngine;
+class Thermostat;
+class Barostat;
 
 class SimulationEngine {
 public:
@@ -19,7 +21,14 @@ public:
         std::string checkpoint_path{"checkpoint.bin"};
     };
 
-    SimulationEngine(std::unique_ptr<ForceEngine> fe, Cell cell, size_t n_atoms, Config config);
+    SimulationEngine(
+        std::unique_ptr<ForceEngine> fe,
+        Cell cell,
+        size_t n_atoms,
+        Config config,
+        std::unique_ptr<Thermostat> thermostat = nullptr,
+        std::unique_ptr<Barostat> barostat = nullptr
+    );
     ~SimulationEngine();
 
     SimulationEngine(const SimulationEngine&) = delete;
@@ -36,11 +45,16 @@ public:
     const SystemData& system() const { return sys_; }
     ForceEngine& force_engine() { return *fe_; }
 
+    void set_thermostat(std::unique_ptr<Thermostat> t);
+    void set_barostat(std::unique_ptr<Barostat> b);
+
     void save_checkpoint(const std::string& path) const;
     void load_checkpoint(const std::string& path);
 
 private:
     std::unique_ptr<ForceEngine> fe_;
+    std::unique_ptr<Thermostat> thermostat_;
+    std::unique_ptr<Barostat> barostat_;
     Integrator integrator_;
     Cell cell_;
     SystemData sys_;

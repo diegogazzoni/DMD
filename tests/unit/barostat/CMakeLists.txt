@@ -1,0 +1,3 @@
+add_executable(test_barostat test_barostat.cpp)
+target_link_libraries(test_barostat PRIVATE dmd_barostat dmd_thermostat dmd_core gtest_main)
+add_test(NAME test_barostat COMMAND test_barostat)

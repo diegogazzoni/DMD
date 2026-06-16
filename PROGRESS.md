@@ -2,13 +2,14 @@
 
 ## Stato attuale
 - **Fase corrente:** Fase 1/2 — Core C++ (CPU)
-- **Ultimo gate superato:** **Gate checkpoint/restart**
-- **Ultima feature completata:** Simulation Engine + checkpoint/restart
+- **Ultimo gate superato:** **Gate termostati/barostati**
+- **Ultima feature completata:** Thermostat + Barostat modules (3 termostati, 2 barostati)
 
 ## Milestones
 - [x] **Gate Argon NVE** — simulazione Argon 256 atomi, 5000 step, energia conservata (drift < 0.5%)
 - [x] **Gate checkpoint/restart** — restart produce traiettorie identiche (bit-exact)
-- [ ] **Gate NPT cycle** — termostato + barostato, ciclo NPT funzionante
+- [x] **Gate termostati/barostati** — 3 termostati + 2 barostati, testati singolarmente
+- [ ] **Gate NPT cycle** — ciclo NPT funzionante su sistema reale (es. acqua)
 - [ ] **I/O PDB/GRO** — lettura/scrittura topology e coordinate
 - [ ] **Produzione** — run completo con output traiettoria ed energia
 
@@ -77,3 +78,17 @@
 - **Gate checkpoint/restart:** restart da checkpoint produce traiettoria bit-exact (32 atomi Ar, 200 step, split 100+100)
 - **Nuovi file:** `src/sim/` (engine, config, checkpoint, CMakeLists), `tests/unit/sim/`, `tests/integration/test_checkpoint_restart.cpp`
 - **Stato:** 14/14 test passano (11 unit + 3 integration)
+
+### 2026-06-16 — Thermostat + Barostat modules (Gate termostati/barostati)
+
+- **Thermostat base:** `thermostat/thermostat.h/.cpp` — classe astratta + funzioni `kinetic_energy()`, `temperature()`
+- **AndersenThermostat:** collisioni stocastiche con bagno termico a frequenza ν
+- **BerendsenThermostat:** rescaling velocities con τ di accoppiamento
+- **NoseHooverThermostat:** friction coefficient ζ, massa termostatica Q = N_f·k_B·T₀·τ²
+- **Barostat base:** `barostat/barostat.h/.cpp` — classe astratta + funzioni `virial()`, `pressure()`
+- **BerendsenBarostat:** scaling isotropico posizioni/cella, compressibilità isothermal
+- **AndersenBarostat:** pistone esteso (ϵ̇, W), equazioni di Langevin per volume
+- **Integrazione:** SimulationEngine accetta Thermostat/Barostat via costruttore o setter, li applica dopo la seconda metà del Velocity Verlet
+- **Costanti fisiche:** `core/constants.h` con KB, PI
+- **Nuove directory:** `src/thermostat/`, `src/barostat/`, `tests/unit/thermostat/`, `tests/unit/barostat/`
+- **Stato:** 16/16 test passano (13 unit + 3 integration)
