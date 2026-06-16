@@ -1,91 +1,380 @@
 # DMD User Guide
 
-## 1. Introduction
+## 1. Introduzione
 
-DMD (Modular Molecular Dynamics) is a CPU-based molecular dynamics engine that simulates atomic and molecular systems under various thermodynamic ensembles. It is designed to be:
+DMD (Discrete Molecular Dynamics) è un motore di simulazione di dinamica
+molecolare ottimizzato per CPU. Permette di simulare sistemi atomici e
+molecolari in diversi ensemble termodinamici (NVE, NVT, NPT).
 
-- **Accurate:** symplectic integrator, analytic forces, bit-exact checkpoint/restart
-- **Configurable:** all run parameters are declared explicitly in a JSON configuration file — no hidden defaults
-- **Extensible:** force components, thermostats, and barostats are modular; new algorithms can be added without touching existing code
+Il software è composto da due livelli:
 
-### Supported ensemble types
+- **Core C++** — motore di simulazione vero e proprio: integratore Velocity
+  Verlet, forze (Lennard-Jones, Coulomb, PME, bonded), termostati, barostati,
+  checkpoint/restart, I/O in formato binario `.dmdin`.
+- **Python API** — interfaccia utente principale: costruzione del sistema,
+  conversione da formati standard (PDB, PSF, GRO), lancio della simulazione,
+  accesso ai risultati.
 
-| Ensemble | Description |
+Questa guida descrive il flusso di lavoro completo dalla preparazione del
+sistema alla simulazione, usando esclusivamente il layer Python.
+
+### 1.1 Ensemble supportati
+
+| Ensemble | Descrizione |
 |---|---|
-| **NVE** | Microcanonical (constant energy, volume, particle count) |
-| **NVT** | Canonical (constant temperature via thermostat) |
-| **NPT** | Isobaric-isothermal (constant pressure via barostat + thermostat) |
+| **NVE** | Microcanonico: energia, volume e numero di particelle costanti |
+| **NVT** | Canonico: temperatura costante tramite termostato |
+| **NPT** | Isobaro-isotermo: pressione e temperatura costanti |
 
 ---
 
-## 2. Installation
+## 2. Installazione
 
-See the [README](../README.md) for system-specific installation instructions.
+### 2.1 Dipendenze
+
+| Dipendenza | Versione minima | Note |
+|---|---|---|
+| Python | 3.10 | 3.14 raccomandato |
+| pip | — | — |
+| CMake | 3.20 | Solo per compilazione del modulo C++ |
+| Compilatore C++17 | gcc ≥ 9, clang ≥ 12 | Apple clang incluso in Xcode |
+| FFTW | 3.3 | Opzionale, solo per PME |
+
+### 2.2 Build del modulo C++
+
+```bash
+git clone <url-del-repository>
+cd dmd
+
+# Crea directory di build e configura
+cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+# Compila tutto (C++ tests + modulo Python)
+cmake --build build -j8
+
+# (Opzionale) Esegui i test C++
+ctest --test-dir build
+```
+
+Il modulo Python `_dmd_core.cpython-XXX-darwin.so` viene automaticamente
+piazzato in `python/dmd/` e importato dal package Python.
+
+### 2.3 Verifica installazione
+
+```bash
+cd python
+PYTHONPATH=$(pwd) python3 -c "import dmd; print('OK')"
+```
+
+Se il comando stampa `OK` senza errori, l'installazione è completa.
 
 ---
 
-## 3. Tutorial: Argon NVE Simulation
+## 3. Panoramica del flusso di lavoro
 
-This tutorial walks through a complete NVE simulation of 32 argon atoms in a cubic box.
+Una simulazione DMD si articola in 4 passi:
 
-### 3.1 Create the system file
+```
+┌─────────────┐    ┌──────────────┐    ┌──────────────┐    ┌──────────┐
+│ 1. Prepara   │ -> │ 2. Costruisci │ -> │ 3. Configura  │ -> │ 4. Eseguí │
+│    sistema   │    │  system.json  │    │  config.json  │    │ dmd.run() │
+│ (PDB/GRO/   │    │               │    │               │    │           │
+│  PSF)       │    │               │    │               │    │           │
+└─────────────┘    └──────────────┘    └──────────────┘    └──────────┘
+```
 
-A `.dmdin` file contains the system topology and initial coordinates. The DMD library provides a C++ API to create one from your own code. Below is a self-contained example that generates a 32-atom argon FCC lattice:
+1. **Prepara il sistema**: puoi usare un file PDB, GRO o PSF, oppure creare
+   un file `system.json` a mano.
+2. **Costruisci il sistema**: il `SystemBuilder` legge `system.json` e
+   produce un oggetto `SimulationConfig` con topology, posizioni e parametri
+   di force field.
+3. **Configura la simulazione**: un file `config.json` specifica tutti i
+   parametri di run (dt, n_steps, termostato, barostato, ecc.).
+4. **Esegui**: `dmd.run()` costruisce il motore, esegue la simulazione e
+   restituisce un oggetto `Engine` con i risultati.
 
-```cpp
-#include "sysbin/dmdin.h"
-#include "sim/simulation_config.h"
-#include <vector>
+---
 
-int main() {
-    constexpr double AR_SIGMA = 0.3405;   // nm
-    constexpr double AR_EPSILON = 0.997;  // kJ/mol
-    constexpr double AR_MASS = 39.948;    // g/mol
-    constexpr double BOX_NM = 1.5;
+## 4. Formato system.json
 
-    SimulationConfig cfg;
-    cfg.box_size = BOX_NM;
-    cfg.use_lj = true;
-    cfg.lj.n_types = 1;
-    cfg.lj.sigma = {AR_SIGMA};
-    cfg.lj.epsilon = {AR_EPSILON};
-    cfg.lj_cutoff = 1.0;
+Il file `system.json` descrive il sistema atomico: scatola di simulazione,
+posizioni, masse, cariche, tipi atomici, e parametri di force field.
 
-    // 32 atoms on a 2×2×2 FCC lattice
-    int n_cells = 2;
-    cfg.masses.assign(32, AR_MASS);
-    cfg.charges.assign(32, 0.0);
+### 4.1 Struttura generale
 
-    double a = BOX_NM / n_cells;
-    for (int i = 0; i < n_cells; ++i)
-      for (int j = 0; j < n_cells; ++j)
-        for (int k = 0; k < n_cells; ++k) {
-          double bx = i*a, by = j*a, bz = k*a;
-          cfg.pos_x.push_back(bx);          cfg.pos_y.push_back(by);          cfg.pos_z.push_back(bz);
-          cfg.pos_x.push_back(bx + a*0.5);  cfg.pos_y.push_back(by + a*0.5);  cfg.pos_z.push_back(bz);
-          cfg.pos_x.push_back(bx + a*0.5);  cfg.pos_y.push_back(by);          cfg.pos_z.push_back(bz + a*0.5);
-          cfg.pos_x.push_back(bx);          cfg.pos_y.push_back(by + a*0.5);  cfg.pos_z.push_back(bz + a*0.5);
-        }
-
-    // Zero initial velocities (can be generated by DMD if gen_vel=true)
-    cfg.vel_x.assign(32, 0.0);
-    cfg.vel_y.assign(32, 0.0);
-    cfg.vel_z.assign(32, 0.0);
-
-    write_dmdin("argon.dmdin", cfg);
-    return 0;
+```json
+{
+    "cell": {
+        "positions": [[x1, y1, z1], [x2, y2, z2], ...],
+        "box_size": 3.0
+    },
+    "atoms": {
+        "mass": [39.948, 39.948, ...],
+        "charge": [0.0, 0.0, ...],
+        "type": ["Ar", "Ar", ...]
+    },
+    "force_field": {
+        "lennard_jones": {
+            "pairs": [
+                {"type_i": "Ar", "type_j": "Ar", "sigma": 0.3405, "epsilon": 0.997}
+            ]
+        },
+        "bonds": [
+            {"i": 0, "j": 1, "k": 1000.0, "r0": 0.15}
+        ]
+    }
 }
 ```
 
-Compile and run this to produce `argon.dmdin`.
+### 4.2 Sezione `cell`
 
-### 3.2 Create the configuration file
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `positions` | array di [x,y,z] | sì | Coordinate atomiche in nm |
+| `box_size` | float | sì | Lato della scatola cubica in nm |
 
-```bash
-dmd config --template > config.json
+### 4.3 Sezione `atoms`
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `mass` | array di float | sì | Masse atomiche in g/mol |
+| `charge` | array di float | no (default 0.0) | Cariche atomiche in e⁻ |
+| `type` | array di string | sì | Nomi dei tipi atomici |
+
+I tre array devono avere la stessa lunghezza (numero di atomi).
+
+### 4.4 Sezione `force_field`
+
+#### Lennard-Jones
+
+```json
+"lennard_jones": {
+    "pairs": [
+        {"type_i": "Ar", "type_j": "Ar", "sigma": 0.3405, "epsilon": 0.997},
+        {"type_i": "OW", "type_j": "OW", "sigma": 0.3166, "epsilon": 0.650},
+        {"type_i": "Ar", "type_j": "OW", "sigma": 0.3285, "epsilon": 0.805}
+    ]
+}
 ```
 
-Edit `config.json` for an NVE run:
+I parametri sigma/epsilon vengono espansi in matrici `n_types × n_types`.
+`n_types` è il numero di tipi atomici distinti nella sezione `atoms.type`.
+
+Se omesso, Lennard-Jones non viene calcolato.
+
+#### Legami (bonds)
+
+```json
+"bonds": [
+    {"i": 0, "j": 1, "k": 1000.0, "r0": 0.15},
+    {"i": 1, "j": 2, "k": 1000.0, "r0": 0.15}
+]
+```
+
+| Campo | Tipo | Obbligatorio | Descrizione |
+|---|---|---|---|
+| `i`, `j` | int | sì | Indici atomici (0-based) |
+| `k` | float | sì | Costante di forza in kJ/(mol·nm²) |
+| `r0` | float | sì | Lunghezza di equilibrio in nm |
+
+---
+
+## 5. Formato config.json
+
+Il file `config.json` specifica tutti i parametri della simulazione. Usa
+uno schema **stretto**: ogni chiave deve essere presente; chiavi sconosciute
+producono errore. Questo garantisce che non ci siano valori di default
+nascosti.
+
+Puoi generare un template completo con:
+
+```bash
+python3 -c "import dmd; print(dmd.generate_config_template())" > config.json
+```
+
+### 5.1 Schema completo
+
+```json
+{
+    "run": {
+        "dt": 0.002,
+        "n_steps": 10000,
+        "init_temperature": 300.0,
+        "gen_vel": false,
+        "seed": 42
+    },
+    "output": {
+        "trajectory_path": "",
+        "nstxout": 100,
+        "nstvout": 100,
+        "nstenergy": 10,
+        "energy_path": "",
+        "checkpoint_interval": 0,
+        "checkpoint_path": ""
+    },
+    "lj": {
+        "cutoff": 1.2
+    },
+    "electrostatics": {
+        "coulomb_type": "cutoff",
+        "cutoff": 1.2,
+        "pme_order": 4,
+        "pme_grid_spacing": 0.12,
+        "ewald_coeff": 3.5
+    },
+    "thermostat": {
+        "type": "none",
+        "temperature": 300.0,
+        "tau": 0.1,
+        "frequency": 10.0
+    },
+    "barostat": {
+        "type": "none",
+        "pressure": 1.0,
+        "tau": 1.0,
+        "compressibility": 4.5e-5
+    },
+    "constraints": {
+        "type": "none",
+        "tolerance": 1e-6
+    }
+}
+```
+
+### 5.2 Reference sezione `run`
+
+| Chiave | Tipo | Descrizione |
+|---|---|---|
+| `dt` | float | Passo di integrazione in picosecondi |
+| `n_steps` | int | Numero totale di passi |
+| `init_temperature` | float | Temperatura di generazione velocità iniziali (K) |
+| `gen_vel` | bool | Se true, genera velocità Maxwell-Boltzmann all'avvio |
+| `seed` | int | Seme del generatore casuale per velocità iniziali |
+
+### 5.3 Reference sezione `output`
+
+| Chiave | Tipo | Descrizione |
+|---|---|---|
+| `trajectory_path` | string | Percorso file H5MD della traiettoria (vuoto = nessun output) |
+| `nstxout` | int | Scrivi posizioni ogni N passi |
+| `nstvout` | int | Scrivi velocità ogni N passi (0 = salta) |
+| `nstenergy` | int | Scrivi energie ogni N passi |
+| `energy_path` | string | Percorso file H5MD delle osservabili |
+| `checkpoint_interval` | int | Checkpoint ogni N passi (0 = disabilitato) |
+| `checkpoint_path` | string | Percorso file checkpoint |
+
+### 5.4 Reference sezione `lj`
+
+| Chiave | Tipo | Descrizione |
+|---|---|---|
+| `cutoff` | float | Raggio di cutoff Lennard-Jones in nm |
+
+### 5.5 Reference sezione `electrostatics`
+
+| Chiave | Tipo | Descrizione |
+|---|---|---|
+| `coulomb_type` | string | Metodo: `"cutoff"`, `"pme"`, o `"direct"` |
+| `cutoff` | float | Raggio di cutoff Coulomb in nm |
+| `pme_order` | int | Ordine B-spline per PME |
+| `pme_grid_spacing` | float | Spaziatura griglia PME in nm |
+| `ewald_coeff` | float | Coefficiente Ewald α in nm⁻¹ |
+
+### 5.6 Reference sezione `thermostat`
+
+| Chiave | Tipo | Descrizione |
+|---|---|---|
+| `type` | string | `"none"`, `"berendsen"`, `"nose-hoover"`, `"andersen"` |
+| `temperature` | float | Temperatura target (K) |
+| `tau` | float | Costante di accoppiamento (ps) — Berendsen e Nose-Hoover |
+| `frequency` | float | Frequenza di collisione (ps⁻¹) — Andersen |
+
+### 5.7 Reference sezione `barostat`
+
+| Chiave | Tipo | Descrizione |
+|---|---|---|
+| `type` | string | `"none"`, `"berendsen"`, `"andersen"` |
+| `pressure` | float | Pressione target (bar) |
+| `tau` | float | Costante di accoppiamento (ps) |
+| `compressibility` | float | Comprimibilità isoterma (bar⁻¹) — Berendsen |
+
+### 5.8 Reference sezione `constraints`
+
+| Chiave | Tipo | Descrizione |
+|---|---|---|
+| `type` | string | `"none"` (unica opzione supportata) |
+| `tolerance` | float | Tolleranza del costruttore di vincoli |
+
+---
+
+## 6. Tutorial: Argon NVE
+
+Questo tutorial mostra una simulazione NVE completa di 32 atomi di Argon
+in una scatola cubica da 1.5 nm, partendo da zero.
+
+### 6.1 Crea system.json
+
+Crea un file `system.json` con il seguente contenuto:
+
+```json
+{
+    "cell": {
+        "positions": [
+            [0.000, 0.000, 0.000],
+            [0.375, 0.375, 0.000],
+            [0.375, 0.000, 0.375],
+            [0.000, 0.375, 0.375],
+            [0.750, 0.750, 0.000],
+            [1.125, 1.125, 0.000],
+            [1.125, 0.750, 0.375],
+            [0.750, 1.125, 0.375],
+            [0.750, 0.000, 0.750],
+            [1.125, 0.375, 0.750],
+            [1.125, 0.000, 1.125],
+            [0.750, 0.375, 1.125],
+            [0.000, 0.750, 0.750],
+            [0.375, 1.125, 0.750],
+            [0.375, 0.750, 1.125],
+            [0.000, 1.125, 1.125],
+            [0.000, 0.000, 0.750],
+            [0.375, 0.375, 0.750],
+            [0.375, 0.000, 1.125],
+            [0.000, 0.375, 1.125],
+            [0.750, 0.750, 0.750],
+            [1.125, 1.125, 0.750],
+            [1.125, 0.750, 1.125],
+            [0.750, 1.125, 1.125],
+            [0.750, 0.000, 0.000],
+            [1.125, 0.375, 0.000],
+            [1.125, 0.000, 0.375],
+            [0.750, 0.375, 0.375],
+            [0.000, 0.750, 0.000],
+            [0.375, 1.125, 0.000],
+            [0.375, 0.750, 0.375],
+            [0.000, 1.125, 0.375]
+        ],
+        "box_size": 1.5
+    },
+    "atoms": {
+        "mass": [39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948, 39.948],
+        "charge": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+        "type": ["Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar", "Ar"]
+    },
+    "force_field": {
+        "lennard_jones": {
+            "pairs": [
+                {"type_i": "Ar", "type_j": "Ar", "sigma": 0.3405, "epsilon": 0.997}
+            ]
+        }
+    }
+}
+```
+
+> Le coordinate rappresentano un reticolo FCC 2×2×2 con parametro di reticolo
+> 0.75 nm (32 atomi in 1.5 nm³).
+
+### 6.2 Crea config.json
+
+Crea un file `config.json` per una simulazione NVE a 85 K:
 
 ```json
 {
@@ -97,13 +386,13 @@ Edit `config.json` for an NVE run:
         "seed": 42
     },
     "output": {
-        "trajectory_path": "trajectory.h5",
-        "nstxout": 100,
-        "nstvout": 100,
-        "nstenergy": 10,
-        "energy_path": "energy.h5",
+        "trajectory_path": "",
+        "nstxout": 0,
+        "nstvout": 0,
+        "nstenergy": 0,
+        "energy_path": "",
         "checkpoint_interval": 0,
-        "checkpoint_path": "checkpoint.bin"
+        "checkpoint_path": ""
     },
     "lj": {
         "cutoff": 1.0
@@ -134,570 +423,608 @@ Edit `config.json` for an NVE run:
 }
 ```
 
-Key settings:
-- `gen_vel: true` — DMD generates Maxwell-Boltzmann velocities at 85 K
-- `thermostat.type: "none"` and `barostat.type: "none"` — run in the NVE ensemble
-- `nstxout: 100` — write a trajectory frame every 100 steps (50 frames total)
+### 6.3 Lancia la simulazione
 
-### 3.3 Run the simulation
+```python
+import dmd
+import json
 
-```bash
-dmd run argon.dmdin config.json
+with open("system.json") as f:
+    system_data = json.load(f)
+
+with open("config.json") as f:
+    config_data = json.load(f)
+
+engine = dmd.run(system_data=system_data, config_data=config_data)
+
+print(f"Passo finale: {engine.current_step}")
+print(f"Tempo finale: {engine.current_time:.4f} ps")
+print(f"Energia potenziale: {engine.potential_energy:.4f} kJ/mol")
+print(f"Posizioni finali:\n{engine.positions}")
 ```
 
-### 3.4 Examine the output
+Output atteso (valori indicativi):
 
-```bash
-# Check trajectory structure
-h5dump -H trajectory.h5
-
-# Read positions from frame 0
-h5dump -d /particles/atoms/position/value -s "0,0,0" -c "1,32,3" trajectory.h5
+```
+Passo finale: 5000
+Tempo finale: 10.0000 ps
+Energia potenziale: -85.2341 kJ/mol
+Posizioni finali:
+[[...]]
 ```
 
-The trajectory file follows the H5MD standard (see section 10).
+### 6.4 Analisi rapida
+
+```python
+import numpy as np
+
+pos = np.array(engine.positions)
+vel = np.array(engine.velocities)
+
+# Energia cinetica
+masses = np.array(system_data["atoms"]["mass"])
+ekin = 0.5 * np.sum(masses * np.sum(vel**2, axis=1))
+print(f"Energia cinetica: {ekin:.4f} kJ/mol")
+
+# Temperatura istantanea
+N = len(masses)
+kb = 0.008314462618  # kJ/(mol·K)
+T = 2 * ekin / (3 * N * kb)
+print(f"Temperatura: {T:.2f} K")
+
+# Raggio di girazione
+com = np.sum(masses[:, None] * pos, axis=0) / np.sum(masses)
+rg2 = np.sum(masses * np.sum((pos - com)**2, axis=1)) / np.sum(masses)
+print(f"Raggio di girazione^2: {rg2:.4f} nm^2")
+```
 
 ---
 
-## 4. Input Files
+## 7. Convertitori di formato
 
-### 4.1 .dmdin — Binary System Format
+Se hai un sistema in formato PDB, GRO o PSF, DMD può convertirlo
+automaticamente in system.json.
 
-The `.dmdin` format is a compact binary representation of a molecular system. It is the only supported input format for the production CLI.
+### 7.1 Da PDB
 
-#### Why binary?
+```python
+import dmd
 
-- **No parsing ambiguity:** floating-point values are stored in IEEE 754 binary representation — no locale or precision issues
-- **Compact:** positions and velocities are stored as 32-bit floats (sufficient for MD accuracy), reducing file size by 2× compared to double-precision text
-- **Fast I/O:** direct memory-mapped reads with no string parsing
-- **Self-describing:** the header contains all metadata needed to read the file
+system = dmd.from_pdb("input.pdb")
 
-#### Format specification
-
-**Header** (120 bytes):
-
-| Offset | Size | Type | Field | Description |
-|---|---|---|---|---|
-| 0 | 4 | uint32 | magic | Magic number: `0x444D444E` ("DMDN") |
-| 4 | 4 | uint32 | version | Format version (currently 1) |
-| 8 | 8 | uint64 | n_atoms | Number of atoms |
-| 16 | 4 | uint32 | cell_type | 0=orthorhombic, 1=triclinic, 2=hexagonal, 3=rhombic_dodecahedron |
-| 20 | 4 | int32 | n_types | Number of distinct atom types |
-| 24 | 4 | uint32 | pos_flags | Bit 0: has velocities |
-| 28 | 4 | uint32 | reserved | Padding (zero) |
-| 32 | 8 | uint64 | offset_ff | Byte offset to the force field section |
-| 40 | 8 | uint64 | offset_pos | Byte offset to the positions section |
-| 48 | 72 | double[9] | box | Box matrix, row-major (3×3) |
-
-**System section** (immediately after header):
-
-| Field | Type | Count |
-|---|---|---|
-| masses | double | n_types |
-| charges | double | n_types |
-
-**FF section** (at `offset_ff`):
-
-| Field | Type | Count |
-|---|---|---|
-| n_bonds | uint32 | 1 |
-| bond_i, bond_j | int32 | n_bonds each |
-| bond_k, bond_r0 | double | n_bonds each |
-| n_angles | uint32 | 1 |
-| angle_i, angle_j, angle_k | int32 | n_angles each |
-| angle_k_theta, angle_theta0 | double | n_angles each |
-| n_dihedrals | uint32 | 1 |
-| dih_i, dih_j, dih_k, dih_l | int32 | n_dihedrals each |
-| dih_per | int32 | n_dihedrals each |
-| dih_k_phi, dih_phi0 | double | n_dihedrals each |
-| n_lj_types | uint32 | 1 |
-| sigma | double | n_lj_types² |
-| epsilon | double | n_lj_types² |
-
-**Positions section** (at `offset_pos`):
-
-| Field | Type | Count |
-|---|---|---|
-| pos_x, pos_y, pos_z | float | n_atoms each |
-| vel_x, vel_y, vel_z (if pos_flags & 1) | float | n_atoms each |
-| atom_types | int32 | n_atoms each |
-
-> Positions and velocities are stored as **32-bit floats** to reduce file size. They are promoted to double precision when loaded into the SimulationEngine.
-
-### 4.2 config.json — Run Configuration
-
-The configuration file uses a strict JSON schema: **every key must be present** and **unknown keys raise an error**. This guarantees that a config file fully specifies the simulation — there are no hidden default values.
-
-Use `dmd config --template` to generate a complete template.
-
-The schema has seven sections:
-
-```
-run             simulation parameters
-output          file paths and sampling intervals
-lj              Lennard-Jones parameters
-electrostatics  Coulomb and PME parameters
-thermostat      temperature coupling (or "none")
-barostat        pressure coupling (or "none")
-constraints     constraint algorithm (or "none")
+# system è un dict compatibile con SystemBuilder
+builder = dmd.SystemBuilder(system)
+cfg = builder.build()
 ```
 
-Full reference in section 12.
+Il parser PDB legge:
+- `CRYST1` → `cell.box_size`
+- `ATOM` / `HETATM` → posizioni e tipo atomico (dal campo elemento, colonne 76-78)
+- La massa è stimata dal tipo atomico
+
+### 7.2 Da GRO
+
+```python
+import dmd
+
+system = dmd.from_gro("input.gro")
+builder = dmd.SystemBuilder(system)
+```
+
+Il parser GRO legge:
+- Prima riga: commento (ignorato)
+- Seconda riga: numero atomi
+- Righe atomi: residuo, nome atomo, posizioni x/y/z
+- Ultima riga: dimensioni scatola
+
+### 7.3 Da PSF
+
+```python
+import dmd
+from dmd.convert.psf import from_psf
+
+psf_data = from_psf("structure.psf")
+# Aggiunge bonds/angles/dihedrals a un system.json esistente
+with open("system.json") as f:
+    system = json.load(f)
+system["force_field"].update(psf_data["force_field"])
+```
+
+Il parser PSF legge le sezioni:
+- `!NBOND` → legami
+- `!NTHETA` → angoli
+- `!NPHI` → diedri
+- `!NIMPHI` → impropri
+
+### 7.4 Workflow combinato
+
+```python
+import dmd
+import json
+
+# Leggi coordinate da PDB
+system = dmd.from_pdb("protein.pdb")
+
+# Aggiungi topology da PSF
+psf = dmd.from_psf("protein.psf")
+system["force_field"].update(psf["force_field"])
+
+# Configura e lancia
+config = {
+    "run": {"dt": 0.002, "n_steps": 10000, "init_temperature": 300.0,
+            "gen_vel": True, "seed": 42},
+    "output": {"trajectory_path": "", "nstxout": 0, "nstvout": 0,
+               "nstenergy": 0, "energy_path": "",
+               "checkpoint_interval": 0, "checkpoint_path": ""},
+    "lj": {"cutoff": 1.2},
+    "electrostatics": {"coulomb_type": "cutoff", "cutoff": 1.2,
+                       "pme_order": 4, "pme_grid_spacing": 0.12,
+                       "ewald_coeff": 3.5},
+    "thermostat": {"type": "none", "temperature": 300.0, "tau": 0.1,
+                   "frequency": 10.0},
+    "barostat": {"type": "none", "pressure": 1.0, "tau": 1.0,
+                 "compressibility": 4.5e-5},
+    "constraints": {"type": "none", "tolerance": 1e-6},
+}
+
+engine = dmd.run(system_data=system, config_data=config)
+print(f"Energia finale: {engine.potential_energy:.4f} kJ/mol")
+```
 
 ---
 
-## 5. Force Fields
+## 8. Riferimento API Python
 
-### 5.1 Lennard-Jones
+### 8.1 `dmd.SystemBuilder`
 
-The Lennard-Jones 12-6 potential describes van der Waals interactions:
+Costruisce un `SimulationConfig` a partire da un dict system.json.
+
+```python
+from dmd import SystemBuilder
+
+# Da dict
+builder = SystemBuilder(system_dict)
+cfg = builder.build()
+
+# Da stringa JSON
+builder = SystemBuilder(json_string)
+
+# Concatena config.json
+builder.apply_config_json(config_dict)
+builder.apply_config_json("config.json")
+
+# Scrivi .dmdin su disco
+builder.write_dmdin("system.dmdin")
+```
+
+### 8.2 `dmd.run()`
+
+Funzione orchestratore: accetta system.json e config.json in varie forme
+e restituisce un motore già eseguito.
+
+```python
+engine = dmd.run(
+    system_data=system_dict,          # dict system.json
+    config_data=config_dict,          # dict config.json
+    # Oppure:
+    dmdin_path="system.dmdin",        # file .dmdin precompilato
+)
+```
+
+### 8.3 `dmd.SimulationConfig`
+
+Configurazione completa della simulazione. Accessibile come oggetto Python
+con proprietà numpy array.
+
+```python
+cfg = dmd.SimulationConfig()
+
+# Scalari
+cfg.dt = 0.002
+cfg.n_steps = 10000
+cfg.box_size = 3.0
+cfg.lj_cutoff = 1.2
+cfg.init_temperature = 300.0
+cfg.gen_vel = True
+cfg.seed = 42
+
+# Array (numpy)
+import numpy as np
+cfg.mass = np.array([39.948, 39.948])
+cfg.charges = np.array([0.0, 0.0])
+cfg.pos_x = np.array([0.0, 1.0])
+cfg.pos_y = np.array([0.0, 0.0])
+cfg.pos_z = np.array([0.0, 0.0])
+cfg.atom_types = np.array([0, 0], dtype=np.int32)
+
+# Parametri LJ
+cfg.lj_sigma = np.array([0.3405])        # n_types² elementi
+cfg.lj_epsilon = np.array([0.997])        # n_types² elementi
+
+# Legami
+cfg.bond_i = np.array([0, 1], dtype=np.int32)
+cfg.bond_j = np.array([1, 2], dtype=np.int32)
+cfg.bond_k = np.array([1000.0, 1000.0])
+cfg.bond_r0 = np.array([0.15, 0.15])
+```
+
+### 8.4 `dmd.Engine`
+
+Motore di simulazione eseguito. Fornisce accesso ai risultati.
+
+```python
+engine = dmd.Engine(cfg)
+engine.run()
+
+# Proprietà in lettura
+engine.current_step      # int — passo corrente
+engine.current_time      # float — tempo corrente (ps)
+engine.positions         # ndarray (n_atoms, 3) — posizioni
+engine.velocities        # ndarray (n_atoms, 3) — velocità
+engine.potential_energy  # float — energia potenziale (kJ/mol)
+```
+
+### 8.5 Funzioni libere
+
+```python
+import dmd
+
+# I/O formato binario .dmdin
+dmd.write_dmdin("system.dmdin", cfg)
+cfg2 = dmd.read_dmdin("system.dmdin")
+
+# Config JSON
+dmd.apply_json_config(cfg, "config.json")
+template = dmd.generate_config_template()
+
+# Build diretto da array numpy
+cfg = dmd.build_cfg(
+    positions, masses, charges, atom_types,
+    box_size=3.0, dt=0.002, n_steps=1000,
+    lj_cutoff=1.2, init_temperature=300.0,
+    gen_vel=False, seed=42
+)
+```
+
+### 8.6 Convertitori
+
+```python
+from dmd import from_pdb, from_psf, from_gro
+
+system = from_pdb("file.pdb")       # -> dict system.json
+system = from_gro("file.gro")       # -> dict system.json
+psf_data = from_psf("file.psf")     # -> dict {force_field: {...}}
+```
+
+---
+
+## 9. Simulazioni avanzate
+
+### 9.1 NVT con termostato Berendsen
+
+```python
+config = {
+    "run": {"dt": 0.002, "n_steps": 10000, "init_temperature": 300.0,
+            "gen_vel": True, "seed": 42},
+    # ... altri campi ...
+    "thermostat": {
+        "type": "berendsen",
+        "temperature": 300.0,
+        "tau": 0.1
+    },
+    "barostat": {"type": "none", "pressure": 1.0, "tau": 1.0,
+                 "compressibility": 4.5e-5},
+    # ...
+}
+```
+
+### 9.2 NPT con Berendsen (termostato + barostato)
+
+```python
+config = {
+    "run": {"dt": 0.002, "n_steps": 20000, "init_temperature": 120.0,
+            "gen_vel": True, "seed": 42},
+    # ... altri campi ...
+    "thermostat": {
+        "type": "berendsen",
+        "temperature": 120.0,
+        "tau": 0.1
+    },
+    "barostat": {
+        "type": "berendsen",
+        "pressure": 100.0,
+        "tau": 1.0,
+        "compressibility": 4.5e-5
+    },
+    # ...
+}
+```
+
+### 9.3 Con PME ( Particle Mesh Ewald )
+
+```python
+config = {
+    # ... run, output, lj ...
+    "electrostatics": {
+        "coulomb_type": "pme",
+        "cutoff": 1.2,
+        "pme_order": 4,
+        "pme_grid_spacing": 0.12,
+        "ewald_coeff": 3.5
+    },
+    # ...
+}
+```
+
+### 9.4 Checkpoint e restart
+
+```python
+config = {
+    # ... run ...
+    "output": {
+        # ...
+        "checkpoint_interval": 500,
+        "checkpoint_path": "checkpoint.bin"
+    },
+    # ...
+}
+```
+
+Per riprendere da un checkpoint, il workflow è:
+
+```python
+import dmd, json
+
+# Passo 1: carica config
+with open("config.json") as f:
+    cfg_json = json.load(f)
+
+# Passo 2: carica sistema dal .dmdin
+cfg = dmd.read_dmdin("system.dmdin")
+engine = dmd.Engine(cfg)
+
+# Imposta passo iniziale (dal checkpoint)
+# Nota: engine parte sempre da 0. Per restart completo serve
+# la funzione di checkpoint/restart del C++.
+engine.run()
+```
+
+> Il checkpoint C++ è bit-exact: riprendendo da un checkpoint si ottiene
+> la stessa traiettoria di una simulazione continua. Le variabili estese
+> (Nose-Hoover ζ, Andersen piston) non sono ancora checkpointate.
+
+---
+
+## 10. Appendice A: Ensemble — teoria
+
+### 10.1 Velocity Verlet
+
+DMD usa l'integratore Velocity Verlet, un algoritmo simplettico (conserva
+l'energia) e reversibile nel tempo.
 
 ```
-E_LJ(rij) = 4ε_ij [ (σ_ij/rij)¹² - (σ_ij/rij)⁶ ]    for r < r_cutoff
+v(t + ½Δt) = v(t) + (Δt/2) · a(t)          # half kick
+r(t + Δt)  = r(t) + Δt · v(t + ½Δt)        # advance
+a(t + Δt)  = F(t + Δt) / m                 # forze
+v(t + Δt)  = v(t + ½Δt) + (Δt/2) · a(t + Δt)  # half kick
 ```
 
-The force on atom `i` from atom `j` is:
+### 10.2 Termostato Berendsen
+
+Scala le velocità per guidare la temperatura istantanea verso il target:
 
 ```
+λ = √(1 + Δt/τ · (T0/T(t) - 1))
+v_i ← λ · v_i
+```
+
+- `τ` piccolo → accoppiamento forte (utile per equilibrazione)
+- Non produce un ensemble canonico esatto
+
+### 10.3 Termostato Nose-Hoover
+
+Estende il sistema con un coefficiente d'attrito ζ:
+
+```
+ζ ← ζ + Δt/2 · (T(t) - T0) · k_B / Q
+v_i ← v_i · exp(-ζ · Δt/2)
+Q = N_f · k_B · T0 · τ²
+```
+
+Produce una distribuzione canonica (NVT) esatta.
+
+### 10.4 Termostato Andersen
+
+Sostituisce casualmente le velocità delle particelle con estrazioni
+Maxwell-Boltzmann:
+
+```
+P(collisione) = ν · Δt
+v_i ← √(k_B · T0 / m_i) · N(0, 1)   per ogni componente
+```
+
+Produce un ensemble canonico ma interrompe la dinamica (traiettorie non
+continue).
+
+### 10.5 Barostato Berendsen
+
+Scala il volume della scatola per guidare la pressione verso il target:
+
+```
+μ = 1 - Δt/τ_P · β · (P0 - P(t))
+r_i ← μ^(1/3) · r_i
+box ← μ^(1/3) · box
+```
+
+### 10.6 Barostato Andersen
+
+Usa un grado di libertà aggiuntivo ( pistone ϵ ) con lagrangiana estesa:
+
+```
+ϵ̇ ← ϵ̇ + Δt/2 · 3V · (P(t) - P0) / W
+r_i ← r_i · exp(ϵ̇ · Δt)
+box ← box · exp(ϵ̇ · Δt)
+W = N_f · k_B · P0 · τ²
+```
+
+---
+
+## 11. Appendice B: Forze
+
+### 11.1 Lennard-Jones
+
+```
+E_LJ(rij) = 4ε_ij [ (σ_ij/rij)¹² - (σ_ij/rij)⁶ ]    per r < r_cutoff
 F_ij = 24 ε_ij (2 (σ_ij/rij)¹² - (σ_ij/rij)⁶) / rij² · r_ij
 ```
 
-For multi-type systems, cross-type parameters are computed at build time and stored in the `sigma` and `epsilon` matrices. A Verlet neighbor list is rebuilt every 10 steps for efficiency.
+Per sistemi multi-tipo, i parametri incrociati sono precalcolati in matrici
+`n_types × n_types`. La lista di vicini di Verlet viene ricostruita ogni
+10 passi.
 
-Implementation: `src/force/lennard_jones.cpp`
-
-### 5.2 Coulomb (Direct Sum)
-
-The direct Coulomb interaction uses a short-range Ewald sum:
+### 11.2 Coulomb (direct sum)
 
 ```
-E_Coul(rij) = k_e · qi · qj · erfc(α rij) / rij    for r < r_cutoff
+E_Coul(rij) = k_e · qi · qj · erfc(α rij) / rij    per r < r_cutoff
 ```
 
-where `k_e = 138.935456 kJ·mol⁻¹·nm·e⁻²` is the Coulomb constant and `α` is the Ewald coefficient. The complementary error function (`erfc`) screens the short-range interaction so that a real-space cutoff can be used.
+k_e = 138.935456 kJ·mol⁻¹·nm·e⁻², α è il coefficiente Ewald.
 
-Implementation: `src/force/coulomb_direct.cpp`
+### 11.3 Coulomb (PME)
 
-### 5.3 Coulomb (Smooth Particle Mesh Ewald — PME)
-
-PME computes the full electrostatic energy by splitting it into real-space and reciprocal-space parts:
+L'energia elettrostatica totale è divisa in tre parti:
 
 ```
 E_Coul = E_real + E_recip + E_self
 ```
 
-**Real space** (same as direct sum above):
+- **Reale**: somma diretta con erfc screening (come sopra, cutoff)
+- **Reciproca**: cariche interpolate su griglia 3D con B-spline, FFT 3D,
+  funzione di Green in spazio di Fourier, back-interpolazione forze
+- **Self-energy**: correzione −k_e · α / √π · Σ q_i²
 
-```
-E_real = k_e Σ_i<j qi·qj · erfc(α rij) / rij
-```
+### 11.4 Bonded
 
-**Reciprocal space** (via B-spline interpolation on a 3D grid):
+**Legame armonico:** E_bond = ½ k_b (r - r0)²
 
-1. **Charge spreading**: each atom's charge is interpolated onto a grid using B-spline functions of order `n`:
+r = |ri - rj|, k_b costante di forza, r0 lunghezza equilibrio.
 
-```
-ρ(k) = Σ_i qi · θ_n(k - xi) · θ_n(yi) · θ_n(zi)    via FFT
-```
+**Angolo armonico:** E_angle = ½ k_θ (θ - θ0)²
 
-2. **Green's function**: compute the electrostatic potential in Fourier space:
+θ = angolo tra atomi i-j-k.
 
-```
-φ̃(k) = 4π k_e / V · exp(-k²/4α²) / k² · B(k) · ρ̃(k)
-```
+**Diedro periodico:** E_dihedral = k_φ (1 + cos(n·φ - φ0))
 
-where `B(k)` is the B-spline correction factor that accounts for the interpolation error.
-
-3. **Force interpolation**: forces are obtained by back-interpolating the grid potential to atomic positions, using the gradient of the B-spline.
-
-**Self-energy correction** (subtracted to avoid double-counting):
-
-```
-E_self = -k_e · α / √π · Σ_i qi²
-```
-
-Implementation: `src/force/coulomb_pme.cpp`
-
-### 5.4 Bonded Interactions
-
-**Harmonic bond:**
-
-```
-E_bond = ½ k_b (r - r0)²
-```
-
-where `r = |ri - rj|` is the bond length, `k_b` the force constant, and `r0` the equilibrium length.
-
-**Harmonic angle:**
-
-```
-E_angle = ½ k_θ (θ - θ0)²
-```
-
-where `θ` is the angle formed by atoms `i-j-k`, `k_θ` the force constant, and `θ0` the equilibrium angle.
-
-**Periodic dihedral:**
-
-```
-E_dihedral = k_φ (1 + cos(n·φ - φ0))
-```
-
-where `φ` is the dihedral angle formed by atoms `i-j-k-l`, `k_φ` the force constant, `n` the periodicity, and `φ0` the phase.
+φ = diedro tra atomi i-j-k-l, n periodicità, φ0 fase.
 
 ---
 
-## 6. Velocity Verlet Integrator
+## 12. Appendice C: Formato binario .dmdin
 
-DMD uses the Velocity Verlet algorithm, a symplectic (energy-conserving) and time-reversible integrator.
+Il formato `.dmdin` è un formato binario compatto per la rappresentazione
+del sistema. Viene usato internamente come cache; gli utenti non dovrebbero
+mai aver bisogno di interagirci direttamente.
 
-The algorithm splits each timestep `Δt` into three stages:
+### 12.1 Header (120 byte)
 
-```
-v(t + ½Δt) = v(t) + (Δt/2) · a(t)          # half kick
-r(t + Δt)  = r(t) + Δt · v(t + ½Δt)        # advance
-a(t + Δt)  = F(t + Δt) / m                 # force compute
-v(t + Δt)  = v(t + ½Δt) + (Δt/2) · a(t + Δt)  # half kick
-```
+| Offset | Byte | Tipo | Campo |
+|---|---|---|---|
+| 0 | 4 | uint32 | Magic: `0x444D444E` |
+| 4 | 4 | uint32 | Versione (1) |
+| 8 | 8 | uint64 | n_atoms |
+| 16 | 4 | uint32 | cell_type |
+| 20 | 4 | int32 | n_types |
+| 24 | 4 | uint32 | pos_flags |
+| 28 | 4 | uint32 | riservato |
+| 32 | 8 | uint64 | offset_ff |
+| 40 | 8 | uint64 | offset_pos |
+| 48 | 72 | double[9] | Matrice scatola |
 
-where `a = F/m` is the acceleration.
+### 12.2 Sezioni
 
-In the actual implementation:
+**System** (dopo header):
+- masses (double × n_types)
+- charges (double × n_types)
 
-```
-Step 0: zero forces and compute F (forces from current positions)
-Step 1: half_kick  (v ← v + ½Δt · F/m)
-Step 2: advance    (r ← r + Δt · v)
-Step 3: zero forces and compute F (forces from updated positions)
-Step 4: half_kick  (v ← v + ½Δt · F/m)
-Step 5: apply thermostat (if any)
-Step 6: apply barostat (if any)
-```
+**Force field** (a offset_ff):
+- n_bonds, bond_i/j, bond_k/r0
+- n_angles, angle_i/j/k, angle_k_theta/theta0
+- n_dihedrals, dih_i/j/k/l, dih_per, dih_k_phi/phi0
+- n_lj_types, sigma (× n_types²), epsilon (× n_types²)
 
-Implementation: `src/integrate/integrator.cpp`
+**Posizioni** (a offset_pos):
+- pos_x/y/z (float × n_atoms)
+- vel_x/y/z (float × n_atoms, solo se pos_flags & 1)
+- atom_types (int32 × n_atoms)
 
----
-
-## 7. Thermostats
-
-### 7.1 Berendsen Thermostat
-
-The Berendsen thermostat rescales velocities to drive the instantaneous temperature `T(t)` toward the target `T0`:
-
-```
-λ = √(1 + Δt/τ · (T0/T(t) - 1))
-
-v_i ← λ · v_i   for all i
-```
-
-- `τ`: coupling time constant (ps). Smaller `τ` = stronger coupling.
-- The algorithm is simple and robust but does not produce a canonical ensemble.
-
-Parameters in `config.json`:
-
-```json
-"thermostat": {
-    "type": "berendsen",
-    "temperature": 300.0,
-    "tau": 0.1
-}
-```
-
-Implementation: `src/thermostat/berendsen.cpp`
-
-### 7.2 Nose-Hoover Thermostat
-
-The Nose-Hoover thermostat extends the system with a friction coefficient `ζ` that follows its own equation of motion:
-
-```
-ζ ← ζ + Δt/2 · (T(t) - T0) · k_B / Q
-
-v_i ← v_i · exp(-ζ · Δt/2)
-
-Q = N_f · k_B · T0 · τ²
-```
-
-where `N_f = 3N - 3` is the number of degrees of freedom and `Q` is the thermostat mass (inertia parameter).
-
-The Nose-Hoover thermostat produces a canonical (NVT) distribution.
-
-Parameters in `config.json`:
-
-```json
-"thermostat": {
-    "type": "nose-hoover",
-    "temperature": 300.0,
-    "tau": 0.1
-}
-```
-
-Implementation: `src/thermostat/nose_hoover.cpp`
-
-### 7.3 Andersen Thermostat
-
-The Andersen thermostat couples the system to a heat bath by randomly replacing particle velocities with Maxwell-Boltzmann draws:
-
-```
-P(collision) = ν · Δt
-
-If collision occurs:
-    v_i ← √(k_B · T0 / m_i) · N(0, 1)   for each component
-
-```
-
-where `ν` is the collision frequency and `N(0,1)` is a standard normal random number.
-
-The Andersen thermostat produces a canonical distribution but disrupts dynamics (no continuous trajectories).
-
-Parameters in `config.json`:
-
-```json
-"thermostat": {
-    "type": "andersen",
-    "temperature": 300.0,
-    "frequency": 10.0
-}
-```
-
-Implementation: `src/thermostat/andersen.cpp`
+Posizioni e velocità sono in precisione 32-bit (float) per ridurre la
+dimensione del file. Vengono promosse a double al caricamento.
 
 ---
 
-## 8. Barostats
+## 13. Appendice D: Best practices
 
-### 8.1 Berendsen Barostat
+### 13.1 Scelta del passo temporale
 
-The Berendsen barostat scales the box volume (and atom positions) to drive the instantaneous pressure `P(t)` toward the target `P0`:
+| Sistema | dt raccomandato |
+|---|---|
+| Tutti gli atomi (standard) | 0.002 ps (2 fs) |
+| Con atomi H senza constraints | 0.001 ps |
+| Coarse-grained | 0.005 ps o più |
 
-```
-μ = 1 - Δt/τ_P · β · (P0 - P(t))
+### 13.2 Scelta dei cutoff
 
-scale = μ^(1/3)
+| Interazione | Cutoff raccomandato |
+|---|---|
+| Lennard-Jones | 1.0 – 1.4 nm |
+| Coulomb (cutoff) | Come LJ |
+| PME grid spacing | 0.10 – 0.15 nm, spline order 4 |
 
-r_i ← scale · r_i
-box ← scale · box
-```
+### 13.3 Costanti di accoppiamento termostato/barostato
 
-- `τ_P`: pressure coupling time constant
-- `β`: isothermal compressibility (bar⁻¹), typically `4.5×10⁻⁵` for water
-
-Parameters in `config.json`:
-
-```json
-"barostat": {
-    "type": "berendsen",
-    "pressure": 1.0,
-    "tau": 1.0,
-    "compressibility": 4.5e-5
-}
-```
-
-Implementation: `src/barostat/berendsen_barostat.cpp`
-
-### 8.2 Andersen Barostat
-
-The Andersen barostat uses an extended Lagrangian approach with a piston degree of freedom `ϵ` and its velocity `ϵ̇`:
-
-```
-W = N_f · k_B · P0 · τ²
-
-ϵ̇ ← ϵ̇ + Δt/2 · 3V · (P(t) - P0) / W
-
-r_i ← r_i · exp(ϵ̇ · Δt)
-box ← box · exp(ϵ̇ · Δt)
-
-ϵ̇ ← ϵ̇ + Δt/2 · 3V · (P(t) - P0) / W
-```
-
-- `W`: piston mass (barostat inertia)
-- The exponential scaling preserves the relative positions within the box.
-
-Parameters in `config.json`:
-
-```json
-"barostat": {
-    "type": "andersen",
-    "pressure": 1.0,
-    "tau": 1.0
-}
-```
-
-Implementation: `src/barostat/andersen_barostat.cpp`
-
----
-
-## 9. Checkpoint and Restart
-
-DMD supports bit-exact checkpoint/restart for reproducible trajectories.
-
-- **Checkpoint format**: binary file containing the full system state (positions, velocities, forces, masses, charges, step number, time, energy) plus internal state of the Lennard-Jones neighbor list
-- **Restart**: loading a checkpoint restores the exact state, and subsequent steps produce exactly the same trajectory as a continuous run
-- **Limitations**: extended variables (Nose-Hoover ζ, Andersen piston ϵ̇) are not yet checkpointed
-
-In `config.json`:
-
-```json
-"output": {
-    "checkpoint_interval": 500,
-    "checkpoint_path": "checkpoint.bin"
-}
-```
-
-Set `checkpoint_interval: 0` to disable checkpointing.
-
----
-
-## 10. H5MD Trajectory Output
-
-Trajectories are written in the H5MD format (HDF5-based standard for molecular dynamics data).
-
-### File structure
-
-```
-/h5md/version                    [1, 1]          (dataset)
-/particles/atoms/position/value  [n_frames, n_atoms, 3]  (double)
-/particles/atoms/position/time   [n_frames]               (double)
-/particles/atoms/position/step   [n_frames]               (int)
-/particles/atoms/velocity/value  [n_frames, n_atoms, 3]  (double, if nstvout>0)
-/particles/atoms/velocity/time   [n_frames]
-/particles/atoms/velocity/step   [n_frames]
-/particles/atoms/box/edges/value [n_frames, 3, 3]        (double)
-/particles/atoms/box/edges/time  [n_frames]
-/particles/atoms/box/edges/step  [n_frames]
-```
-
-Each value dataset has an unlimited first dimension — frames are appended as the simulation runs.
-
-### Reading with Python (h5py)
-
-```python
-import h5py
-
-with h5py.File("trajectory.h5", "r") as f:
-    pos = f["/particles/atoms/position/value"][:]   # (n_frames, n_atoms, 3)
-    box = f["/particles/atoms/box/edges/value"][:]  # (n_frames, 3, 3)
-    step = f["/particles/atoms/position/step"][:]   # (n_frames,)
-    time = f["/particles/atoms/position/time"][:]   # (n_frames,)
-```
-
-### Reading with h5dump
-
-```bash
-# Show full file structure
-h5dump -H trajectory.h5
-
-# Read specific frame
-h5dump -d /particles/atoms/position/value -s "0,0,0" -c "1,32,3" trajectory.h5
-```
-
-## 11. Output Intervals (nstxout, nstvout, nstenergy)
-
-The output section controls what gets written and how often:
-
-| Key | Default | Description |
+| Scopo | τ termostato | τ barostato |
 |---|---|---|
-| `nstxout` | 100 | Write positions every N steps |
-| `nstvout` | 100 | Write velocities every N steps |
-| `nstenergy` | 10 | Write energy/thermodynamic data every N steps |
+| Equilibrazione forte | 0.1 ps | 1.0 ps |
+| Produzione debole | 1.0 ps | 5.0 ps |
 
-If `nstvout = 0`, the velocity group is omitted from the H5MD file entirely.
+Per produzione NPT: Nose-Hoover + Andersen barostat (ensemble più accurato).
 
----
+### 13.4 Checkpoint
 
-## 12. Configuration Reference
+- Scrivi checkpoint ogni 500 – 5000 passi
+- Verifica sempre che restart riproduca traiettorie identiche
 
-### `run` section
+### 13.5 Performance
 
-| Key | Type | Example | Description |
-|---|---|---|---|
-| `dt` | float | 0.002 | Time step (ps) |
-| `n_steps` | int | 10000 | Number of integration steps |
-| `init_temperature` | float | 300.0 | Target temperature for velocity generation (K) |
-| `gen_vel` | bool | false | If true, generate Maxwell-Boltzmann velocities |
-| `seed` | int | 42 | Random seed for velocity generation |
-
-### `output` section
-
-| Key | Type | Example | Description |
-|---|---|---|---|
-| `trajectory_path` | string | "trajectory.h5" | H5MD trajectory output path |
-| `nstxout` | int | 100 | Position output interval (steps) |
-| `nstvout` | int | 100 | Velocity output interval (steps, 0 = skip) |
-| `nstenergy` | int | 10 | Energy output interval (steps) |
-| `energy_path` | string | "energy.h5" | Energy/observables output path |
-| `checkpoint_interval` | int | 500 | Checkpoint interval (steps, 0 = disable) |
-| `checkpoint_path` | string | "checkpoint.bin" | Checkpoint file path |
-
-### `lj` section
-
-| Key | Type | Example | Description |
-|---|---|---|---|
-| `cutoff` | float | 1.2 | Lennard-Jones cutoff distance (nm) |
-
-### `electrostatics` section
-
-| Key | Type | Example | Description |
-|---|---|---|---|
-| `coulomb_type` | string | "cutoff" | Electrostatic method: `"cutoff"` (direct Ewald), `"pme"` (PME), or `"direct"` |
-| `cutoff` | float | 1.2 | Coulomb cutoff distance (nm) |
-| `pme_order` | int | 4 | B-spline order for PME interpolation |
-| `pme_grid_spacing` | float | 0.12 | Grid spacing for PME (nm); grid dimensions = box / spacing |
-| `ewald_coeff` | float | 0.34 | Ewald coefficient α (nm⁻¹) |
-
-### `thermostat` section
-
-| Key | Type | Example | Description |
-|---|---|---|---|
-| `type` | string | "none" | Thermostat: `"none"`, `"berendsen"`, `"nose-hoover"`, `"andersen"` |
-| `temperature` | float | 300.0 | Target temperature (K) |
-| `tau` | float | 0.1 | Coupling time constant (ps) — Berendsen and Nose-Hoover |
-| `frequency` | float | 10.0 | Collision frequency (ps⁻¹) — Andersen only |
-
-### `barostat` section
-
-| Key | Type | Example | Description |
-|---|---|---|---|
-| `type` | string | "none" | Barostat: `"none"`, `"berendsen"`, `"andersen"` |
-| `pressure` | float | 1.0 | Target pressure (bar) |
-| `tau` | float | 1.0 | Coupling time constant (ps) |
-| `compressibility` | float | 4.5e-5 | Isothermal compressibility (bar⁻¹) — Berendsen only |
-
-### `constraints` section
-
-| Key | Type | Example | Description |
-|---|---|---|---|
-| `type` | string | "none" | Constraint algorithm: `"none"` (only option currently) |
-| `tolerance` | float | 1e-6 | Constraint tolerance |
+- LJ e Coulomb direct dominano il costo computazionale (loop a coppie)
+- PME scala O(N log N) via FFT, più efficiente del direct sum per N > 2000
+- Compila con `-O2` o `-O3` per produzione
 
 ---
 
-## 13. Tips and Best Practices
+## 14. Appendice E: Structure del codice
 
-### Choosing a time step
-
-- For all-atom systems: `dt = 0.002 ps` (2 fs) is standard
-- For systems with hydrogen atoms without constraints: use `dt = 0.001 ps`
-- For coarse-grained systems: `dt = 0.005 ps` or higher
-
-### Choosing cutoffs
-
-- Lennard-Jones: `1.0 – 1.4 nm` is standard
-- Coulomb (cutoff): same as LJ cutoff
-- PME: grid spacing of `0.10 – 0.15 nm` with spline order 4 is typical
-
-### Thermostat/barostat coupling times
-
-- Berendsen thermostat: `τ = 0.1 ps` for strong coupling (equilibration), `1.0 ps` for weak coupling (production)
-- Nose-Hoover: `τ = 0.1 – 1.0 ps`
-- Berendsen barostat: `τ = 1.0 – 5.0 ps`
-- For production NPT: use Nose-Hoover thermostat + Andersen barostat (more accurate ensemble)
-
-### Checkpoint strategy
-
-- Write checkpoints every `500 – 5000` steps, depending on simulation length
-- Always verify that restart trajectories match continuous runs for new systems
-
-### Performance
-
-- The Lennard-Jones and Coulomb direct interactions dominate the compute cost (pairwise loops)
-- PME scales as `O(N log N)` via FFT and is more efficient than direct sum for systems with more than a few thousand atoms
-- Build with optimisations (`-O2` or `-O3`) for production runs
+```
+dmd/
+├── python/                    # Package Python
+│   ├── dmd/
+│   │   ├── __init__.py        # Esporta API pubblica
+│   │   ├── core.cpp           # Bindings pybind11 → _dmd_core.so
+│   │   ├── system.py          # SystemBuilder
+│   │   ├── runner.py          # run() orchestrator
+│   │   └── convert/
+│   │       ├── __init__.py
+│   │       ├── pdb.py         # Parse PDB
+│   │       ├── psf.py         # Parse PSF
+│   │       └── gro.py         # Parse GRO
+│   └── pyproject.toml
+├── src/                       # Core C++
+│   ├── sim/                   # Config, engine, integrator
+│   ├── force/                 # Forze (LJ, Coulomb, PME, bonded)
+│   ├── cell/                  # Cella di simulazione, neighbor list
+│   ├── sysbin/                # Formato .dmdin
+│   ├── thermo/                # Termostati
+│   ├── baro/                  # Barostati
+│   └── main/                  # CLI (dmd run / dmd config)
+└── tests/                     # Test C++ (Google Test)
+```
