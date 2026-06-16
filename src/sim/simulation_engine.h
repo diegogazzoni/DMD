@@ -10,14 +10,16 @@ class ForceComponent;
 class ForceEngine;
 class Thermostat;
 class Barostat;
+class H5MDWriter;
 
 class SimulationEngine {
 public:
     struct Config {
         double dt{0.002};
         int n_steps{1000};
-        int trajectory_interval{100};
+        int trajectory_interval{0};
         int checkpoint_interval{500};
+        std::string trajectory_path{"trajectory.h5"};
         std::string checkpoint_path{"checkpoint.bin"};
     };
 
@@ -55,6 +57,7 @@ private:
     std::unique_ptr<ForceEngine> fe_;
     std::unique_ptr<Thermostat> thermostat_;
     std::unique_ptr<Barostat> barostat_;
+    std::unique_ptr<H5MDWriter> trajectory_writer_;
     Integrator integrator_;
     Cell cell_;
     SystemData sys_;

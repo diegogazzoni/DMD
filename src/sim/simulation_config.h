@@ -29,8 +29,9 @@ struct SimulationConfig {
     std::vector<HarmonicAngleParams> angles;
     std::vector<PeriodicDihedralParams> dihedrals;
 
-    int trajectory_interval{100};
+    int trajectory_interval{0};
     int checkpoint_interval{500};
+    std::string trajectory_path{"trajectory.h5"};
     std::string checkpoint_path{"checkpoint.bin"};
 };
 

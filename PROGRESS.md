@@ -2,8 +2,8 @@
 
 ## Stato attuale
 - **Fase corrente:** Fase 1/2 — Core C++ (CPU)
-- **Ultimo gate superato:** **dmdin binary I/O**
-- **Ultima feature completata:** dmdin format + reader/writer + JSON config
+- **Ultimo gate superato:** **H5MD trajectory output**
+- **Ultima feature completata:** H5MD writer integrato in SimulationEngine
 
 ## Milestones
 - [x] **Gate Argon NVE** — simulazione Argon 256 atomi, 5000 step, energia conservata (drift < 0.5%)
@@ -11,8 +11,8 @@
 - [x] **Gate termostati/barostati** — 3 termostati + 2 barostati, testati singolarmente
 - [x] **Gate NPT cycle** — ciclo NPT (Berendsen T+P) su Argon 108 atomi, T=120K, P=100 bar
 - [x] **dmdin binary I/O** — formato binario input + JSON config reader
-- [ ] **H5MD trajectory output** — scrittura traiettorie in formato H5MD
-- [ ] **Produzione** — run completo da file .dmdin a traiettoria
+- [x] **H5MD trajectory output** — scrittura traiettorie in formato H5MD
+- [ ] **Produzione** — run completo da file .dmdin a traiettoria H5MD
 
 ---
 
@@ -108,6 +108,20 @@
 - **Nuova dipendenza:** nlohmann/json v3.11.3 (header-only)
 - **Nuovo modulo:** `src/sysbin/` + `tests/unit/sysbin/`
 - **Stato:** 18/18 test passano (14 unit + 4 integration)
+
+### 2026-06-16 — H5MD trajectory output
+
+- **H5MDWriter:** classe in `src/trajectory/h5md_writer.h/.cpp`
+  - Formato H5MD standard: `/h5md/version = [1,1]`, `/particles/atoms/{position,velocity,box/edges}`
+  - Dataset estendibili (chunked, first dim = H5S_UNLIMITED) per append di frame
+  - Scrive: posizioni (x,y,z interleaved), velocità (opzionale), box 3×3, time+step per frame
+- **Integrazione SimulationEngine:** `Config::trajectory_path`, `Config::trajectory_interval`
+  - `run()` crea H5MDWriter se `trajectory_interval > 0`
+  - `save_frame()` chiama `writer.write_frame(sys, cell_);`
+  - `build_simulation()` propaga `cfg.trajectory_path` → `engine_cfg.trajectory_path`
+- **Nuova dipendenza:** HDF5 2.1.1 (Homebrew, via `find_package(HDF5 COMPONENTS C)`)
+- **Nuovo modulo:** `src/trajectory/` + `tests/unit/trajectory/`
+- **Stato:** 19/19 test passano (15 unit + 4 integration)
 
 ### 2026-06-16 — Gate NPT cycle (Berendsen T+P su Argon liquido)
 

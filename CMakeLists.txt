@@ -12,6 +12,12 @@ option(DMD_BUILD_TESTS "Build unit tests" ON)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FFTW REQUIRED IMPORTED_TARGET fftw3)
 
+find_package(HDF5 REQUIRED COMPONENTS C)
+# HDF5 from Homebrew on Apple Silicon may need explicit HINTS
+if(NOT HDF5_FOUND)
+    find_package(HDF5 REQUIRED COMPONENTS C HINTS /opt/homebrew)
+endif()
+
 include(FetchContent)
 
 FetchContent_Declare(

@@ -6,6 +6,7 @@
 #include "thermostat/thermostat.h"
 #include "barostat/barostat.h"
 #include "checkpoint.h"
+#include "trajectory/h5md_writer.h"
 #include <fstream>
 #include <vector>
 
@@ -68,8 +69,18 @@ void SimulationEngine::step() {
 }
 
 void SimulationEngine::run() {
+    if (config_.trajectory_interval > 0 && !trajectory_writer_) {
+        trajectory_writer_ = std::make_unique<H5MDWriter>(
+            config_.trajectory_path, sys_.n_atoms,
+            /*write_vel=*/true);
+    }
+
     for (int i = 0; i < config_.n_steps; ++i) {
         step();
+
+        if (config_.trajectory_interval > 0 && step_ % config_.trajectory_interval == 0) {
+            save_frame();
+        }
 
         if (config_.checkpoint_interval > 0 && step_ % config_.checkpoint_interval == 0) {
             save_checkpoint(config_.checkpoint_path);
@@ -105,6 +116,12 @@ void SimulationEngine::load_checkpoint(const std::string& path) {
     if (idx >= 0) {
         auto* lj = dynamic_cast<LennardJones*>(fe_->components()[idx].get());
         if (lj) lj->set_step_since_rebuild(lj_step_since_rebuild_);
+    }
+}
+
+void SimulationEngine::save_frame() {
+    if (trajectory_writer_) {
+        trajectory_writer_->write_frame(sys_, cell_);
     }
 }
 
@@ -149,6 +166,7 @@ SimulationEngine build_simulation(const SimulationConfig& cfg) {
     engine_cfg.n_steps = cfg.n_steps;
     engine_cfg.trajectory_interval = cfg.trajectory_interval;
     engine_cfg.checkpoint_interval = cfg.checkpoint_interval;
+    engine_cfg.trajectory_path = cfg.trajectory_path;
     engine_cfg.checkpoint_path = cfg.checkpoint_path;
 
     SimulationEngine engine(std::move(fe), cell, n, engine_cfg);
