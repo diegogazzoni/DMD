@@ -9,6 +9,9 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(DMD_BUILD_TESTS "Build unit tests" ON)
 
 # ----- Dependencies -----
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FFTW REQUIRED IMPORTED_TARGET fftw3)
+
 if(DMD_BUILD_TESTS)
     include(FetchContent)
     FetchContent_Declare(

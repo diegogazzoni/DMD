@@ -21,3 +21,7 @@ add_test(NAME test_periodic_dihedral COMMAND test_periodic_dihedral)
 add_executable(test_force_engine test_force_engine.cpp)
 target_link_libraries(test_force_engine PRIVATE dmd_force gtest_main)
 add_test(NAME test_force_engine COMMAND test_force_engine)
+
+add_executable(test_coulomb_pme test_coulomb_pme.cpp)
+target_link_libraries(test_coulomb_pme PRIVATE dmd_force gtest_main)
+add_test(NAME test_coulomb_pme COMMAND test_coulomb_pme)

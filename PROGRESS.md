@@ -46,3 +46,17 @@
 - **Gate:** test integratione Argon NVE con 256 atomi FCC, densità 1.4 g/cm³, T=85K
 - **Drift:** 0.15% su 5000 step, tolleranza 0.5%
 - **Stato:** 11/11 test passano
+
+### 2026-06-16 — CoulombPME con FFTW (completamento Fase 2)
+
+- **FFTW:** integrato via `PkgConfig::FFTW` (Homebrew 3.3.11 su Apple Silicon)
+- **CoulombPME:** implementazione completa SPME (Particle Mesh Ewald)
+  - **B-spline:** cubic cardinal B-spline (ordine 4), supporto 4 punti per dimensione
+  - **Charge spreading:** interpolazione B-spline su griglia 3D con PBC
+  - **FFT (r2c/c2r):** FFTW 3D in-place per efficienza
+  - **Green's function:** 4πk_e/V * exp(−k²/4α²)/k² * B(k) (con correzione B-spline)
+  - **Peso Hermitiano:** w=2 per 0<kx<nx/2 (r2c dimezzato)
+  - **Self-energy:** −k_e·α/√π·Σq²
+  - **Forze:** interpolazione dal potenziale reciproco con derivate B-spline e fattori dimensioni nx/Lx, ny/Ly, nz/Lz
+- **Test:** 6 test (B-spline, self-energy, simmetria forze, conservazione energia NVE breve)
+- **Stato:** 12/12 test passano (10 unit + 1 integration + 1 PME)
