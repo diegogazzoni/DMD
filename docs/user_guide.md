@@ -2,7 +2,7 @@
 
 ## 1. Introduzione
 
-DMD (Discrete Molecular Dynamics) è un motore di simulazione di dinamica
+DMD (Delicious Molecular Dynamics) è un motore di simulazione di dinamica
 molecolare ottimizzato per CPU. Permette di simulare sistemi atomici e
 molecolari in diversi ensemble termodinamici (NVE, NVT, NPT).
 

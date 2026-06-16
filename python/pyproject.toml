@@ -5,7 +5,7 @@ build-backend = "setuptools.backends._legacy:_Backend"
 [project]
 name = "dmd"
 version = "0.1.0"
-description = "Discrete Molecular Dynamics engine"
+description = "Delicious Molecular Dynamics engine"
 requires-python = ">=3.10"
 dependencies = [
     "numpy>=1.24",
