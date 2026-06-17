@@ -68,6 +68,14 @@ class SystemBuilder:
             if "r0" in bonds[0]:
                 self.cfg.bond_r0 = np.array([b.get("r0", 0.0) for b in bonds], dtype=np.float64)
 
+        exclusions = data.get("exclusions", [])
+        if exclusions:
+            self.cfg.excl_i = [e[0] for e in exclusions]
+            self.cfg.excl_j = [e[1] for e in exclusions]
+        else:
+            self.cfg.excl_i = []
+            self.cfg.excl_j = []
+
         return self
 
     def apply_config_json(self, path_or_dict: str | dict) -> "SystemBuilder":

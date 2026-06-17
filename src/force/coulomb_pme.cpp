@@ -3,6 +3,7 @@
 #include <cmath>
 #include <algorithm>
 #include <cstring>
+#include <omp.h>
 
 CoulombPME::CoulombPME(PMEParams params)
     : params_(std::move(params))
@@ -11,6 +12,9 @@ CoulombPME::CoulombPME(PMEParams params)
     int nx_half = nx / 2 + 1;
     size_t grid_size = static_cast<size_t>(nz) * ny * (2 * nx_half);
     grid_.resize(grid_size, 0.0);
+
+    fftw_init_threads();
+    fftw_plan_with_nthreads(omp_get_max_threads());
 
     plan_fwd_ = fftw_plan_dft_r2c_3d(
         nz, ny, nx,
@@ -23,11 +27,14 @@ CoulombPME::CoulombPME(PMEParams params)
         reinterpret_cast<fftw_complex*>(grid_.data()),
         grid_.data(),
         FFTW_ESTIMATE);
+
+    fftw_plan_with_nthreads(1);
 }
 
 CoulombPME::~CoulombPME() {
     fftw_destroy_plan(plan_fwd_);
     fftw_destroy_plan(plan_bwd_);
+    fftw_cleanup_threads();
 }
 
 std::string CoulombPME::name() const { return "CoulombPME"; }

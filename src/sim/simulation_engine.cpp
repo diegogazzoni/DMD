@@ -6,6 +6,7 @@
 #include "force/lennard_jones.h"
 #include "force/coulomb_direct.h"
 #include "force/coulomb_pme.h"
+#include "force/coulomb_exclusion.h"
 #include "thermostat/thermostat.h"
 #include "thermostat/berendsen.h"
 #include "thermostat/nose_hoover.h"
@@ -160,6 +161,11 @@ std::unique_ptr<ForceEngine> build_force_engine(const SimulationConfig& cfg) {
         p.ewald_coefficient = cfg.ewald_coeff;
         fe->add_component(std::make_unique<CoulombDirect>(p));
     } else if (cfg.coulomb_type == "pme") {
+        CoulombDirectParams dp;
+        dp.cutoff = cfg.coulomb_cutoff;
+        dp.ewald_coefficient = cfg.ewald_coeff;
+        fe->add_component(std::make_unique<CoulombDirect>(dp));
+
         PMEParams p;
         p.cutoff = cfg.coulomb_cutoff;
         p.ewald_coefficient = cfg.ewald_coeff;
@@ -168,6 +174,19 @@ std::unique_ptr<ForceEngine> build_force_engine(const SimulationConfig& cfg) {
         p.ny = p.nx;
         p.nz = p.nx;
         fe->add_component(std::make_unique<CoulombPME>(p));
+
+        auto excl = std::make_unique<CoulombExclusion>();
+        excl->set_exclusions(cfg.excl_i, cfg.excl_j);
+        fe->add_component(std::move(excl));
+    }
+
+    // For direct Coulomb mode, add exclusion correction if exclusions exist
+    if (cfg.coulomb_type == "direct" || cfg.coulomb_type == "cutoff") {
+        if (!cfg.excl_i.empty()) {
+            auto excl = std::make_unique<CoulombExclusion>();
+            excl->set_exclusions(cfg.excl_i, cfg.excl_j);
+            fe->add_component(std::move(excl));
+        }
     }
 
     return fe;
@@ -240,6 +259,13 @@ SimulationEngine build_simulation(const SimulationConfig& cfg) {
         return nullptr;
     }();
 
+    auto* coulomb_excl = [&]() -> CoulombExclusion* {
+        for (auto& c : fe->components()) {
+            if (auto* ce = dynamic_cast<CoulombExclusion*>(c.get())) return ce;
+        }
+        return nullptr;
+    }();
+
     Cell cell(cfg.box_size, cfg.box_size, cfg.box_size);
 
     size_t n = cfg.pos_x.size();
@@ -272,6 +298,9 @@ SimulationEngine build_simulation(const SimulationConfig& cfg) {
         sys.atom_types.assign(n, 0);
     }
 
+    sys.excl_i = cfg.excl_i;
+    sys.excl_j = cfg.excl_j;
+
     if (lj_ptr) {
         lj_ptr->set_atom_types(sys.atom_types);
     }
@@ -280,6 +309,9 @@ SimulationEngine build_simulation(const SimulationConfig& cfg) {
     }
     if (coulomb_pme) {
         coulomb_pme->set_charges(sys.charges);
+    }
+    if (coulomb_excl) {
+        coulomb_excl->set_charges(sys.charges);
     }
 
     // Generate velocities if requested

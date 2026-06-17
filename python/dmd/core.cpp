@@ -172,6 +172,8 @@ PYBIND11_MODULE(_dmd_core, m) {
         .def_readwrite("ewald_coeff", &SimulationConfig::ewald_coeff)
         .def_readwrite("constraint_type", &SimulationConfig::constraint_type)
         .def_readwrite("constraint_tolerance", &SimulationConfig::constraint_tolerance)
+        .def_readwrite("excl_i", &SimulationConfig::excl_i)
+        .def_readwrite("excl_j", &SimulationConfig::excl_j)
         // Vectors as numpy arrays
         .def_property("mass",        [&](SimulationConfig& c) { return vec_to_arr_d(c.masses); },
             [](SimulationConfig& c, py::array_t<double> a) {

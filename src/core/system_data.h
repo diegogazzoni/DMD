@@ -18,6 +18,8 @@ struct SystemData {
     size_t step;
     double time;
 
+    std::vector<int> excl_i, excl_j;
+
     SystemData();
     explicit SystemData(size_t n);
 
