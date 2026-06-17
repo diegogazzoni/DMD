@@ -5,6 +5,8 @@ build/
 *.dylib
 *.a
 *.out
+__pycache__/
+*.pyc
 
 ARCHITECTURE.md
 PROGRESS.md
