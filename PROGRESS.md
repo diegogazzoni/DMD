@@ -177,3 +177,21 @@
   - Supporto futuro: AMBER (`amber.py`), OPLS (`opls.py`), GROMOS
 - **Workflow utente:** `from_pdb + from_psf + load_forcefield + merge_ff → dmd.run()`
 - **Da implementare:** parser CHARMM PAR/PRM, merger, integrazione in __init__.py
+
+### 2026-06-17 — ForceField parser (implementazione fase 7)
+
+- **File creati e modificati:**
+  - `python/dmd/forcefield/__init__.py` — public API exports
+  - `python/dmd/forcefield/base.py` — `FFParams` dataclass (atom_types, bonds, angles, dihedrals, impropers)
+  - `python/dmd/forcefield/registry.py` — `register()` + `load_forcefield(format)` dispatcher
+  - `python/dmd/forcefield/charmm.py` — CHARMM PAR/PRM parser con wildcard `X`, multi-term dihedrals
+  - `python/dmd/forcefield/merger.py` — `merge_ff(psf_data, ff_params)` → abbina connettività PSF + parametri FF per tipo atomico + matrice LJ combinata (Lorentz-Berthelot)
+  - `python/dmd/convert/psf.py` — aggiornato per estrarre anche `atom_types` dalla sezione !NATOM
+  - `python/dmd/__init__.py` — esporta `load_forcefield`, `merge_ff`
+- **Flusso di lavoro:** `from_pdb + from_psf + load_forcefield + merge_ff → system → dmd.run()`
+- **Test:** end-to-end con PDB (3 atomi) + PSF + CHARMM PAR → build → run → 50 step
+- **Problemi risolti:**
+  - Multi-term dihedrals: due entry con (i,j,k,l) uguale ma periodo/k_phi/phi0 diverso
+  - Wildcard `X` per impropers
+  - Tipi atomici: PDB e PSF possono avere nomi diversi → l'utente deve sovrascrivere `atoms.type` con `psf['atom_types']`
+- **Stato:** 20/20 test C++ passano + forcefield pipeline verificata manualmente

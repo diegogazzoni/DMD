@@ -1,13 +1,22 @@
-"""PSF (Protein Structure File) parser — produces bonds, angles, dihedrals, impropers."""
+"""PSF (Protein Structure File) parser — produces bonds, angles, dihedrals, impropers + atom types."""
 
 
 def from_psf(psf_path: str) -> dict:
-    """Parse a PSF file into a system.json dict (force_field section only)."""
+    """Parse a PSF file into a system.json dict (force_field + atom_types section).
+
+    Returns a dict with:
+        force_field: bonds, angles, dihedrals, impropers (indices 0-based)
+        atom_types: list of type names per atom (index position = atom index)
+    """
     bonds = []
     angles = []
     dihedrals = []
     impropers = []
+    atom_types_list = []
     section = None
+    n_atoms = 0
+    atom_line_idx = 0
+
     with open(psf_path) as f:
         for line in f:
             stripped = line.strip()
@@ -31,7 +40,20 @@ def from_psf(psf_path: str) -> dict:
                 section = None
                 continue
 
-            if section == "bonds":
+            if section == "atoms":
+                if atom_line_idx >= n_atoms:
+                    continue
+                cols = stripped.split()
+                if len(cols) >= 7:
+                    atom_type = cols[5]
+                elif len(cols) >= 4:
+                    atom_type = cols[3]
+                else:
+                    atom_type = f"UNK{atom_line_idx}"
+                atom_types_list.append(atom_type)
+                atom_line_idx += 1
+
+            elif section == "bonds":
                 parts = stripped.split()
                 for i in range(0, len(parts), 2):
                     if i + 1 < len(parts):
@@ -78,4 +100,8 @@ def from_psf(psf_path: str) -> dict:
         force_field["dihedrals"] = dihedrals
     if impropers:
         force_field["impropers"] = impropers
-    return {"force_field": force_field}
+
+    result = {"force_field": force_field}
+    if atom_types_list:
+        result["atom_types"] = atom_types_list
+    return result

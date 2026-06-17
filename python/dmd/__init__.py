@@ -18,6 +18,7 @@ from _dmd_core import (
 from dmd.system import SystemBuilder
 from dmd.runner import run
 from dmd.convert import from_pdb, from_psf, from_gro
+from dmd.forcefield import load_forcefield, merge_ff
 
 __all__ = [
     "SimulationConfig",
@@ -32,4 +33,6 @@ __all__ = [
     "from_pdb",
     "from_psf",
     "from_gro",
+    "load_forcefield",
+    "merge_ff",
 ]
