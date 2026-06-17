@@ -225,3 +225,32 @@
     [5000 steps in 2.3s]  ns/day=178507.4
   ```
 - **Test:** minimize (100) → NVE (200) → continuation NVE (500) con progress; 20/20 C++ test passano
+
+### 2026-06-17 — Phase 0 Pre-Test Acqua: PME exclusion, FFTW threading, PSF exclusions (FIX)
+
+- **Fase 0.3 — FFTW3 multi-thread:**
+  - `src/force/coulomb_pme.cpp`: chiama `fftw_init_threads()` + `fftw_plan_with_nthreads(omp_get_max_threads())` nel costruttore
+  - `src/force/CMakeLists.txt`: link `libfftw3_omp` + `libomp` (Homebrew su Apple Silicon)
+- **Fase 0.2 — PSF exclusions (Python):**
+  - `python/dmd/convert/psf.py`: nuova funzione `_exclusion_pairs(bonds, angles, dihedrals, scale_14)` che genera lista coppie escluse 1-2, 1-3
+  - `from_psf()` ora accetta `scale_14` e restituisce `exclusions` nel dict
+  - `python/dmd/system.py`: `SystemBuilder.from_system_json()` legge `exclusions` e popola `cfg.excl_i/excl_j`
+- **Fase 0.1 — PME exclusion correction (C++):**
+  - Nuovo componente `src/force/coulomb_exclusion.h/.cpp`: `CoulombExclusion` sottrae `q_i·q_j/r` per coppie escluse (corregge PME che include tutte le coppie)
+  - `build_force_engine()`: quando `coulomb_type == "pme"`, aggiunge **entrambi** `CoulombDirect` (real-space erfc) + `CoulombPME` (reciproco FFT) + `CoulombExclusion` (correzione)
+  - Quando `coulomb_type == "direct"`, aggiunge `CoulombDirect` + `CoulombExclusion` (se ci sono esclusioni)
+  - `SystemData` + `SimulationConfig`: aggiunti `excl_i, excl_j` (flat pair arrays)
+  - `python/dmd/core.cpp` (pybind11): esposti `excl_i`, `excl_j` su `SimulationConfig`
+- **Bug critici risolti:**
+  - CHARMM parser: aggiunta conversione unità LJ (kcal→kJ, A→nm, deg→rad) — sigma era in A, epsilon in kcal
+  - Merger: condizionale `if sig_i and sig_j` falliva con sigma=0 (H) → sigma=1.0 per H-OH2. Fix: calcola sempre media aritmetica, condizionale solo su epsilon.
+  - SystemBuilder: `pos[:,0]` crea vista numpy non contigua → pybind setter legge dati contigui ignorando stride → coordinate lette in colonne errate (X→Z shift). Fix: `.copy()` su ogni slice colonna.
+  - H5MD non scritto con `engine.run_n()` (usato per progress reporting): `run_n()` chiamava `engine_.step()` bypassando `run()` che crea H5MDWriter. Fix: `EngineWrapper::run_n()` ora crea writer e salva frame a intervallo configurato.
+- **Test:** 20/20 test C++ passano + water test 522 TIP3P (1566 atomi) NVT nose-hoover 300K:
+  - 500 step: PE~1661 kJ/mol (1.06/atom), stabile, forces O(1000) kJ/(mol·nm)
+  - 2000 step (40 frame con nstxout=50): PE stabile ~1400-2000 kJ/mol, 138s, ns/day=1.3
+  - H5MD (3MB, 40 frame) e .npy generati in test_acqua/
+  - HDF5 file lock issue su macOS con `H5F_ACC_TRUNC` dopo run consecutivi — risolto pulendo file pre-esistenti
+- **Visualizzazione:** script `test_acqua/visualize_vdw.py` → MP4 con O (rosso) e H (bianco/grigio), Z-sorted, VDW-like scatter
+- **Infrastruttura:** `.gitignore` aggiornato con `test_acqua/*`
+- **Gate:** —

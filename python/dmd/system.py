@@ -25,9 +25,9 @@ class SystemBuilder:
         self.cfg.box_size = data["cell"].get("box_size", 3.0)
 
         pos = np.array(data["cell"]["positions"], dtype=np.float64)
-        self.cfg.pos_x = pos[:, 0]
-        self.cfg.pos_y = pos[:, 1]
-        self.cfg.pos_z = pos[:, 2]
+        self.cfg.pos_x = pos[:, 0].copy()
+        self.cfg.pos_y = pos[:, 1].copy()
+        self.cfg.pos_z = pos[:, 2].copy()
 
         masses = np.array(data["atoms"]["mass"], dtype=np.float64)
         self.cfg.mass = masses

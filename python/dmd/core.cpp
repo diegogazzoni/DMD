@@ -8,6 +8,7 @@
 #include "sysbin/dmdin.h"
 #include "core/system_data.h"
 #include "core/cell.h"
+#include "trajectory/h5md_writer.h"
 #include <cmath>
 
 namespace py = pybind11;
@@ -15,6 +16,7 @@ namespace py = pybind11;
 // Wrapper to expose SimulationEngine with a simpler interface
 struct EngineWrapper {
     SimulationEngine engine_;
+    std::unique_ptr<H5MDWriter> trajectory_writer_;
     double box_size_;
     size_t n_atoms_;
 
@@ -27,8 +29,20 @@ struct EngineWrapper {
     void run() { engine_.run(); }
 
     void run_n(int steps) {
-        for (int i = 0; i < steps; ++i)
+        if (engine_.config().trajectory_interval > 0 && !trajectory_writer_) {
+            auto& sys = engine_.system();
+            trajectory_writer_ = std::make_unique<H5MDWriter>(
+                engine_.config().trajectory_path, sys.n_atoms,
+                /*write_vel=*/true);
+        }
+        for (int i = 0; i < steps; ++i) {
             engine_.step();
+            if (trajectory_writer_ &&
+                engine_.current_step() % engine_.config().trajectory_interval == 0) {
+                auto& sys = engine_.system();
+                trajectory_writer_->write_frame(sys, engine_.cell());
+            }
+        }
     }
 
     double box_size() const { return box_size_; }

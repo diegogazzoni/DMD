@@ -153,8 +153,8 @@ def merge_ff(
                 eps_j = p_j.get("epsilon", 0.0)
                 sig_i = p_i.get("sigma", 1.0)
                 sig_j = p_j.get("sigma", 1.0)
-                eps = (eps_i * eps_j) ** 0.5 if eps_i and eps_j else 0.0
-                sig = (sig_i + sig_j) / 2.0 if sig_i and sig_j else 1.0
+                eps = (eps_i * eps_j) ** 0.5 if eps_i != 0.0 and eps_j != 0.0 else 0.0
+                sig = (sig_i + sig_j) * 0.5
                 pairs.append({
                     "type_i": ti,
                     "type_j": tj,

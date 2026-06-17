@@ -46,6 +46,8 @@ public:
     SystemData& system() { return sys_; }
     const SystemData& system() const { return sys_; }
     ForceEngine& force_engine() { return *fe_; }
+    const Cell& cell() const { return cell_; }
+    const Config& config() const { return config_; }
 
     void set_thermostat(std::unique_ptr<Thermostat> t);
     void set_barostat(std::unique_ptr<Barostat> b);

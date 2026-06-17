@@ -72,9 +72,15 @@ class CharmmParser:
                     cols = stripped.split()
                     if len(cols) >= 3 and not cols[0].startswith("!"):
                         t1, eps, rmin = cols[0], cols[1], cols[2]
+                        # CHARMM: epsilon in kcal/mol, rmin/2 in Angstrom
+                        # DMD:    sigma in nm, epsilon in kJ/mol
+                        # sigma = (2 * rmin_2) / (10 * 2^(1/6))  [convert Rmin→sigma, A→nm]
+                        eps_val = abs(float(eps)) * 4.184        # kcal → kJ
+                        sig_val = (float(rmin) * 2.0) / (10.0 * 1.122462048309373)  # about 1.12246 = 2^(1/6)
+                        # Shortcut: sig = float(rmin) * 0.1781
                         params.atom_types[t1] = {
-                            "epsilon": float(eps),
-                            "sigma": float(rmin) * 2.0,
+                            "epsilon": eps_val,
+                            "sigma": sig_val,
                         }
         return params
 
