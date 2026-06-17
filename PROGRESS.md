@@ -195,3 +195,17 @@
   - Wildcard `X` per impropers
   - Tipi atomici: PDB e PSF possono avere nomi diversi → l'utente deve sovrascrivere `atoms.type` con `psf['atom_types']`
 - **Stato:** 20/20 test C++ passano + forcefield pipeline verificata manualmente
+
+### 2026-06-17 — Minimizer + Checkpoint/Continuation (fase 7.2)
+
+- **File creati e modificati:**
+  - `python/dmd/checkpoint.py` — `write_checkpoint(path, engine, system_data)`, `read_checkpoint(path)`, `checkpoint_to_system_data(ckpt)`
+  - `python/dmd/minimizer.py` — `minimize(system_data, n_steps, step_size, energy_tol, output)` steepest descent con backtracking
+  - `python/dmd/runner.py` — `run()` ora accetta `checkpoint=` per continuation
+  - `python/dmd/core.cpp` — esposta `forces` come `ndarray (n_atoms, 3)` su EngineWrapper
+  - `python/dmd/system.py` — `use_lj=True` e `lj_cutoff` automatici quando ci sono parametri LJ
+  - `python/dmd/__init__.py` — esporta `write_checkpoint`, `read_checkpoint`, `minimize`
+- **Formato checkpoint.json:** autocontenuto (system + state), separato da config.json
+- **Flusso:** minimize → checkpoint → run(checkpoint=, config_data=) → checkpoint → run(checkpoint=, ...)
+- **Test:** fresh run (50), minimize (50) → run (50), checkpoint after MD (50) → continuation (100) → second continuation (200)
+- **Stato:** 20/20 test C++ passano + minimizer/checkpoint pipeline verificata

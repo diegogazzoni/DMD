@@ -46,6 +46,8 @@ class SystemBuilder:
         ff = data.get("force_field", {})
         lj = ff.get("lennard_jones", {})
         if lj:
+            self.cfg.use_lj = True
+            self.cfg.lj_cutoff = lj.get("cutoff", 2.5)
             n_types = len(set(type_names))
             sigma = np.full((n_types, n_types), 1.0, dtype=np.float64)
             epsilon = np.full((n_types, n_types), 0.0, dtype=np.float64)

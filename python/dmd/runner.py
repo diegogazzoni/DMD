@@ -9,6 +9,7 @@ from _dmd_core import (
     apply_json_config,
 )
 from dmd.system import SystemBuilder
+from dmd.checkpoint import read_checkpoint, checkpoint_to_system_data
 
 
 def run(
@@ -17,6 +18,7 @@ def run(
     system_json: str | None = None,
     config_json: str | None = None,
     dmdin_path: str | None = None,
+    checkpoint: str | None = None,
     output_dmdin: str | None = None,
     output_traj: str | None = None,
 ) -> Engine:
@@ -26,7 +28,12 @@ def run(
         - system_json + config_json (file paths)
         - system_data + config_data (dicts or JSON strings)
         - dmdin_path (prebuilt .dmdin file + optional config_json)
+        - checkpoint (continuation from a checkpoint.json file)
     """
+    if checkpoint:
+        ckpt = read_checkpoint(checkpoint)
+        system_data = checkpoint_to_system_data(ckpt)
+
     if dmdin_path:
         cfg = read_dmdin(dmdin_path)
         if config_json:
@@ -44,7 +51,7 @@ def run(
                 apply_json_config(cfg, tmpcfg)
             finally:
                 os.unlink(tmpcfg)
-    else:
+    elif system_data:
         if isinstance(system_data, str):
             system_data = json.loads(system_data)
         builder = SystemBuilder(system_data)
@@ -53,6 +60,8 @@ def run(
                 config_data = json.loads(config_data)
             builder.apply_config_json(config_data)
         cfg = builder.build()
+    else:
+        raise ValueError("Provide one of: system_data, dmdin_path, or checkpoint")
 
     if output_dmdin:
         write_dmdin(output_dmdin, cfg)

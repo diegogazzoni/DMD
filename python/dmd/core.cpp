@@ -20,6 +20,20 @@ struct EngineWrapper {
         : engine_(build_simulation(std::move(cfg))) {}
 
     void run() { engine_.run(); }
+
+    py::array_t<double> forces() const {
+        auto& sys = engine_.system();
+        py::ssize_t n = static_cast<py::ssize_t>(sys.n_atoms);
+        auto arr = py::array_t<double>({n, py::ssize_t(3)});
+        auto buf = arr.template mutable_unchecked<2>();
+        for (size_t i = 0; i < sys.n_atoms; ++i) {
+            buf(i, 0) = sys.forces_x[i];
+            buf(i, 1) = sys.forces_y[i];
+            buf(i, 2) = sys.forces_z[i];
+        }
+        return arr;
+    }
+
     int current_step() const { return engine_.current_step(); }
     double current_time() const { return engine_.current_time(); }
 
@@ -242,6 +256,7 @@ PYBIND11_MODULE(_dmd_core, m) {
         .def_property_readonly("current_time", &EngineWrapper::current_time)
         .def_property_readonly("positions", &EngineWrapper::positions)
         .def_property_readonly("velocities", &EngineWrapper::velocities)
+        .def_property_readonly("forces", &EngineWrapper::forces)
         .def_property_readonly("potential_energy", &EngineWrapper::potential_energy);
 
     // ---- Free functions ----
