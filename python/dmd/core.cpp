@@ -15,11 +15,24 @@ namespace py = pybind11;
 // Wrapper to expose SimulationEngine with a simpler interface
 struct EngineWrapper {
     SimulationEngine engine_;
+    double box_size_;
+    size_t n_atoms_;
 
     EngineWrapper(SimulationConfig cfg)
-        : engine_(build_simulation(std::move(cfg))) {}
+        : engine_(build_simulation(std::move(cfg)))
+        , box_size_(cfg.box_size)
+        , n_atoms_(cfg.masses.size())
+    {}
 
     void run() { engine_.run(); }
+
+    void run_n(int steps) {
+        for (int i = 0; i < steps; ++i)
+            engine_.step();
+    }
+
+    double box_size() const { return box_size_; }
+    size_t n_atoms() const { return n_atoms_; }
 
     py::array_t<double> forces() const {
         auto& sys = engine_.system();
@@ -252,11 +265,14 @@ PYBIND11_MODULE(_dmd_core, m) {
     py::class_<EngineWrapper>(m, "Engine")
         .def(py::init<SimulationConfig>(), py::arg("cfg"))
         .def("run", &EngineWrapper::run)
+        .def("run_n", &EngineWrapper::run_n, py::arg("steps"))
         .def_property_readonly("current_step", &EngineWrapper::current_step)
         .def_property_readonly("current_time", &EngineWrapper::current_time)
         .def_property_readonly("positions", &EngineWrapper::positions)
         .def_property_readonly("velocities", &EngineWrapper::velocities)
         .def_property_readonly("forces", &EngineWrapper::forces)
+        .def_property_readonly("box_size", &EngineWrapper::box_size)
+        .def_property_readonly("n_atoms", &EngineWrapper::n_atoms)
         .def_property_readonly("potential_energy", &EngineWrapper::potential_energy);
 
     // ---- Free functions ----

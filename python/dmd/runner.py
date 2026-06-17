@@ -10,6 +10,7 @@ from _dmd_core import (
 )
 from dmd.system import SystemBuilder
 from dmd.checkpoint import read_checkpoint, checkpoint_to_system_data
+from dmd.status import SimulationStatus
 
 
 def run(
@@ -21,6 +22,7 @@ def run(
     checkpoint: str | None = None,
     output_dmdin: str | None = None,
     output_traj: str | None = None,
+    progress_interval: int = 100,
 ) -> Engine:
     """Orchestrate a DMD simulation run.
 
@@ -29,6 +31,9 @@ def run(
         - system_data + config_data (dicts or JSON strings)
         - dmdin_path (prebuilt .dmdin file + optional config_json)
         - checkpoint (continuation from a checkpoint.json file)
+
+    Args:
+        progress_interval: print status every N steps (0 to disable)
     """
     if checkpoint:
         ckpt = read_checkpoint(checkpoint)
@@ -67,7 +72,20 @@ def run(
         write_dmdin(output_dmdin, cfg)
 
     engine = Engine(cfg)
-    engine.run()
+
+    if progress_interval > 0 and cfg.n_steps > 0:
+        status = SimulationStatus(engine, dt=cfg.dt, interval=progress_interval)
+        status.start()
+        chunk = progress_interval
+        remaining = cfg.n_steps
+        while remaining > 0:
+            take = min(chunk, remaining)
+            engine.run_n(take)
+            remaining -= take
+            status.step()
+        status.finish()
+    else:
+        engine.run()
 
     if output_traj:
         _write_traj(engine, output_traj)

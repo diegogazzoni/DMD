@@ -209,3 +209,19 @@
 - **Flusso:** minimize → checkpoint → run(checkpoint=, config_data=) → checkpoint → run(checkpoint=, ...)
 - **Test:** fresh run (50), minimize (50) → run (50), checkpoint after MD (50) → continuation (100) → second continuation (200)
 - **Stato:** 20/20 test C++ passano + minimizer/checkpoint pipeline verificata
+
+### 2026-06-17 — Status reporter + run_n (fase 7.3)
+
+- **File creati e modificati:**
+  - `python/dmd/status.py` — `SimulationStatus` class: timer, progress table stile GROMACS (step, time, PE, box, ns/day), `start()/step()/finish()` lifecycle
+  - `python/dmd/runner.py` — `run()` ora ha parametro `progress_interval=100`: chunked execution con `engine.run_n(chunk)` + status live tra i chunk
+  - `python/dmd/core.cpp` — aggiunte: `run_n(steps)`, `box_size`, `n_atoms` su `EngineWrapper`
+- **Formato output:**
+  ```
+        Step  Time (ps)    PE (kJ/mol)   Box (nm)   ns/day
+  --------------------------------------------------------
+        500     1.0000        -0.0031     3.0000 175575.5
+        ...
+    [5000 steps in 2.3s]  ns/day=178507.4
+  ```
+- **Test:** minimize (100) → NVE (200) → continuation NVE (500) con progress; 20/20 C++ test passano
