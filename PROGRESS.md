@@ -166,3 +166,14 @@
 - `pyproject.toml` for pip install
 - **CMakeLists.txt** builds `_dmd_core.so` into `python/dmd/`
 - **Stato:** 20/20 test C++ passano + Python bindings verificati manualmente (build, import, config, system, run)
+
+### 2026-06-17 — ForceField parser (design fase 7)
+
+- **Architettura force field generica** progettata:
+  - `python/dmd/forcefield/` package con `base.py`, `registry.py`, `charmm.py`
+  - Classe astratta `ForceFieldParser` con metodo `parse(path) → FFParams`
+  - `FFParams` struttura: atom_types, bonds, angles, dihedrals, impropers
+  - `merger.py` — abbina connettività PSF + parametri FF per tipo atomico
+  - Supporto futuro: AMBER (`amber.py`), OPLS (`opls.py`), GROMOS
+- **Workflow utente:** `from_pdb + from_psf + load_forcefield + merge_ff → dmd.run()`
+- **Da implementare:** parser CHARMM PAR/PRM, merger, integrazione in __init__.py
