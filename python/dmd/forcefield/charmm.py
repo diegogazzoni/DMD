@@ -31,12 +31,17 @@ class CharmmParser:
                         }
                 elif section == "ANGLES":
                     cols = stripped.split()
-                    if len(cols) >= 6 and not cols[0].startswith("!"):
-                        t1, t2, t3, ktheta, theta0 = cols[0], cols[1], cols[2], cols[3], cols[4]
+                    if len(cols) >= 5 and not cols[0].startswith("!"):
+                        t1, t2, t3 = cols[0], cols[1], cols[2]
+                        ktheta, theta0 = cols[3], cols[4]
                         key = (t1, t2, t3)
+                        # theta0: CHARMM uses degrees → convert to radians
+                        # k_theta: CHARMM uses kcal/(mol·rad²) or kJ/(mol·rad²)
+                        #          stored as-is; DMD C++ expects kJ/(mol·rad²)
+                        TORAD = 0.017453292519943295  # π/180
                         params.angles[key] = {
                             "k_theta": float(ktheta),
-                            "theta0": float(theta0),
+                            "theta0": float(theta0) * TORAD,
                         }
                 elif section == "DIHEDRALS":
                     cols = stripped.split()

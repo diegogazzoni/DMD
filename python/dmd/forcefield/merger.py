@@ -164,3 +164,88 @@ def merge_ff(
         force_field["lennard_jones"] = {"pairs": pairs}
 
     return {"force_field": force_field}
+
+
+def generate_constraints(
+    psf_data: dict,
+    ff_params: FFParams,
+    atom_types: Optional[List[str]] = None,
+) -> List[dict]:
+    """Generate SHAKE constraint list from PSF connectivity + FF parameters.
+
+    For each water-like angle (i-j-k) with a central atom j, produces three
+    constraints: i-j (bond), j-k (bond), i-k (angle-derived).
+
+    Args:
+        psf_data: output of from_psf()
+        ff_params: output of load_forcefield()
+        atom_types: optional override for atom type names
+
+    Returns:
+        list of dicts with keys: i, j, distance
+    """
+    if atom_types is None:
+        atom_types = psf_data.get("atom_types", [])
+    psf_ff = psf_data.get("force_field", {})
+
+    # Build bond distance lookup: (sorted atom indices) -> distance
+    bond_dist = {}
+    for b in psf_ff.get("bonds", []):
+        ai, aj = b["i"], b["j"]
+        d = None
+        if atom_types:
+            ti = atom_types[ai]
+            tj = atom_types[aj]
+            p = _best_match((ti, tj), ff_params.bonds)
+            if p and "r0" in p:
+                d = p["r0"]
+            elif p and "distance" in p:
+                d = p["distance"]
+        if d is None:
+            d = b.get("r0", b.get("distance", 0.0))
+        bond_dist[(min(ai, aj), max(ai, aj))] = d
+
+    constraints = []
+    seen_pairs = set()
+
+    def add_constraint(i, j, distance):
+        key = (min(i, j), max(i, j))
+        if key not in seen_pairs:
+            constraints.append({"i": i, "j": j, "distance": distance})
+            seen_pairs.add(key)
+
+    for angle in psf_ff.get("angles", []):
+        ai, aj, ak = angle["i"], angle["j"], angle["k"]
+
+        # Bond i-j
+        d_ij = bond_dist.get((min(ai, aj), max(ai, aj)))
+        if d_ij is not None:
+            add_constraint(ai, aj, d_ij)
+
+        # Bond j-k
+        d_jk = bond_dist.get((min(aj, ak), max(aj, ak)))
+        if d_jk is not None:
+            add_constraint(aj, ak, d_jk)
+
+        # Angle-derived i-k distance
+        theta0 = None
+        if atom_types:
+            ti = atom_types[ai]
+            tj = atom_types[aj]
+            tk = atom_types[ak]
+            p = _best_match((ti, tj, tk), ff_params.angles)
+            if p and "theta0" in p:
+                theta0 = p["theta0"]
+
+        if theta0 is not None and d_ij is not None and d_jk is not None:
+            d_ik = (d_ij * d_ij + d_jk * d_jk
+                    - 2.0 * d_ij * d_jk * _cos(theta0)) ** 0.5
+            add_constraint(ai, ak, d_ik)
+
+    return constraints
+
+
+def _cos(angle_rad: float) -> float:
+    """Cosine, safe for small angles."""
+    import math
+    return math.cos(angle_rad)

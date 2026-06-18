@@ -1,14 +1,18 @@
 #include "integrate/constraints.h"
+#include "core/cell.h"
 #include "core/system_data.h"
 #include <gtest/gtest.h>
 #include <cmath>
 
+Cell make_big_cell() {
+    return Cell(100.0, 100.0, 100.0);  // large box so no PBC wrapping
+}
+
 TEST(ConstraintsTest, SimpleBondConstraint) {
     ConstraintsParams params;
-    params.n = 1;
     params.i = {0}; params.j = {1};
     params.distance_target = {1.0};
-    params.algorithm = ConstraintAlgorithm::shake;
+    params.tolerance = 1e-8;
 
     Constraints constraints(std::move(params));
 
@@ -18,8 +22,8 @@ TEST(ConstraintsTest, SimpleBondConstraint) {
     sys.pos_x[0] = 0.0; sys.pos_y[0] = 0.0; sys.pos_z[0] = 0.0;
     sys.pos_x[1] = 1.1; sys.pos_y[1] = 0.1; sys.pos_z[1] = 0.05;
 
-    double dt = 0.001;
-    constraints.apply(sys, dt);
+    Cell cell = make_big_cell();
+    constraints.apply(sys, cell);
 
     double dx = sys.pos_x[1] - sys.pos_x[0];
     double dy = sys.pos_y[1] - sys.pos_y[0];
@@ -31,10 +35,9 @@ TEST(ConstraintsTest, SimpleBondConstraint) {
 
 TEST(ConstraintsTest, MultipleConstraints) {
     ConstraintsParams params;
-    params.n = 2;
     params.i = {0, 1}; params.j = {1, 2};
     params.distance_target = {1.0, 1.0};
-    params.algorithm = ConstraintAlgorithm::shake;
+    params.tolerance = 1e-8;
 
     Constraints constraints(std::move(params));
 
@@ -44,8 +47,8 @@ TEST(ConstraintsTest, MultipleConstraints) {
     sys.pos_x[1] = 1.05; sys.pos_y[1] = 0.1;  sys.pos_z[1] = 0.0;
     sys.pos_x[2] = 2.1;  sys.pos_y[2] = -0.1; sys.pos_z[2] = 0.0;
 
-    double dt = 0.001;
-    constraints.apply(sys, dt);
+    Cell cell = make_big_cell();
+    constraints.apply(sys, cell);
 
     double dx01 = sys.pos_x[1] - sys.pos_x[0];
     double dy01 = sys.pos_y[1] - sys.pos_y[0];
@@ -59,4 +62,31 @@ TEST(ConstraintsTest, MultipleConstraints) {
 
     EXPECT_NEAR(r01, 1.0, 1e-6);
     EXPECT_NEAR(r12, 1.0, 1e-6);
+}
+
+TEST(ConstraintsTest, RattleVelocityConstraint) {
+    ConstraintsParams params;
+    params.i = {0}; params.j = {1};
+    params.distance_target = {1.0};
+    params.tolerance = 1e-8;
+
+    Constraints constraints(std::move(params));
+
+    SystemData sys(2);
+    sys.masses[0] = 1.0;
+    sys.masses[1] = 1.0;
+    sys.pos_x[0] = 0.0; sys.pos_y[0] = 0.0; sys.pos_z[0] = 0.0;
+    sys.pos_x[1] = 1.0; sys.pos_y[1] = 0.0; sys.pos_z[1] = 0.0;
+    // velocity with component along bond
+    sys.vel_x[0] = 0.1; sys.vel_y[0] = 0.0; sys.vel_z[0] = 0.0;
+    sys.vel_x[1] = 0.3; sys.vel_y[1] = 0.0; sys.vel_z[1] = 0.0;
+
+    Cell cell = make_big_cell();
+    constraints.apply_rattle(sys, cell);
+
+    double dvx = sys.vel_x[1] - sys.vel_x[0];
+    double dx = sys.pos_x[1] - sys.pos_x[0];
+    double r_dot_v = dx * dvx;
+
+    EXPECT_NEAR(r_dot_v, 0.0, 1e-8);
 }

@@ -26,11 +26,13 @@ SimulationEngine::SimulationEngine(
     size_t n_atoms,
     Config config,
     std::unique_ptr<Thermostat> thermostat,
-    std::unique_ptr<Barostat> barostat
+    std::unique_ptr<Barostat> barostat,
+    std::unique_ptr<Constraints> constraints
 )
     : fe_(std::move(fe))
     , thermostat_(std::move(thermostat))
     , barostat_(std::move(barostat))
+    , constraints_(std::move(constraints))
     , cell_(cell)
     , sys_(n_atoms)
     , config_(std::move(config))
@@ -61,6 +63,8 @@ void SimulationEngine::step() {
     integrator_.half_kick(sys_, config_.dt);
     integrator_.advance(sys_, config_.dt);
 
+    if (constraints_) constraints_->apply(sys_, cell_);
+
     sys_.forces_x.assign(sys_.n_atoms, 0.0);
     sys_.forces_y.assign(sys_.n_atoms, 0.0);
     sys_.forces_z.assign(sys_.n_atoms, 0.0);
@@ -69,6 +73,8 @@ void SimulationEngine::step() {
     fe_->compute(sys_, cell_);
 
     integrator_.half_kick(sys_, config_.dt);
+
+    if (constraints_) constraints_->apply_rattle(sys_, cell_);
 
     if (thermostat_) thermostat_->apply(sys_, config_.dt);
     if (barostat_) barostat_->apply(sys_, cell_, config_.dt);
@@ -280,8 +286,19 @@ SimulationEngine build_simulation(const SimulationConfig& cfg) {
     auto thermo = make_thermostat(cfg, n);
     auto baro = make_barostat(cfg, n);
 
+    std::unique_ptr<Constraints> constraints;
+    if (cfg.constraint_type == "shake" && !cfg.constraint_i.empty()) {
+        ConstraintsParams cp;
+        cp.i = cfg.constraint_i;
+        cp.j = cfg.constraint_j;
+        cp.distance_target = cfg.constraint_dist;
+        cp.tolerance = cfg.constraint_tolerance;
+        constraints = std::make_unique<Constraints>(std::move(cp));
+    }
+
     SimulationEngine engine(std::move(fe), cell, n, engine_cfg,
-                            std::move(thermo), std::move(baro));
+                            std::move(thermo), std::move(baro),
+                            std::move(constraints));
     auto& sys = engine.system();
 
     sys.masses.assign(cfg.masses.begin(), cfg.masses.end());

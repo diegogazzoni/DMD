@@ -1,6 +1,7 @@
 #pragma once
 
 #include "integrate/integrator.h"
+#include "integrate/constraints.h"
 #include "core/cell.h"
 #include "core/system_data.h"
 #include <memory>
@@ -29,7 +30,8 @@ public:
         size_t n_atoms,
         Config config,
         std::unique_ptr<Thermostat> thermostat = nullptr,
-        std::unique_ptr<Barostat> barostat = nullptr
+        std::unique_ptr<Barostat> barostat = nullptr,
+        std::unique_ptr<Constraints> constraints = nullptr
     );
     ~SimulationEngine();
 
@@ -59,6 +61,7 @@ private:
     std::unique_ptr<ForceEngine> fe_;
     std::unique_ptr<Thermostat> thermostat_;
     std::unique_ptr<Barostat> barostat_;
+    std::unique_ptr<Constraints> constraints_;
     std::unique_ptr<H5MDWriter> trajectory_writer_;
     Integrator integrator_;
     Cell cell_;

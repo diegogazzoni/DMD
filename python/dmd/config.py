@@ -126,6 +126,11 @@ def apply_config(cfg: SimulationConfig, config: dict) -> None:
     cfg.constraint_type = cc["type"]
     cfg.constraint_tolerance = cc["tolerance"]
 
+    if cfg.constraint_type == "shake" and len(cfg.constraint_i) == 0:
+        raise ValueError(
+            "constraint_type='shake' but no constraint pairs in system data"
+        )
+
 
 def generate_config_template() -> str:
     t = {

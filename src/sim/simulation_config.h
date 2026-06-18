@@ -72,6 +72,9 @@ struct SimulationConfig {
     // Constraints
     std::string constraint_type{"none"};
     double constraint_tolerance{1e-6};
+    std::vector<int> constraint_i;
+    std::vector<int> constraint_j;
+    std::vector<double> constraint_dist;
 
     // Exclusions (1-2, 1-3, 1-4 pairs to exclude from non-bonded)
     std::vector<int> excl_i;

@@ -63,6 +63,12 @@ class SystemBuilder:
             if "r0" in bonds[0]:
                 self.cfg.bond_r0 = np.array([b.get("r0", 0.0) for b in bonds], dtype=np.float64)
 
+        constraints = ff.get("constraints", [])
+        if constraints:
+            self.cfg.constraint_i = [c["i"] for c in constraints]
+            self.cfg.constraint_j = [c["j"] for c in constraints]
+            self.cfg.constraint_dist = [c["distance"] for c in constraints]
+
         exclusions = data.get("exclusions", [])
         if exclusions:
             self.cfg.excl_i = [e[0] for e in exclusions]

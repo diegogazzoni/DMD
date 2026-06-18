@@ -13,6 +13,7 @@ ARCHITECTURE.md
 PROGRESS.md
 
 session*
+*.egg-info/
 .opencode/*
 design/*
 test_acqua/
