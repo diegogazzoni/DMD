@@ -1,8 +1,8 @@
+from __future__ import annotations
 import numpy as np
 from _dmd_core import SimulationConfig, Engine
 from dmd.system import SystemBuilder
 from dmd.checkpoint import write_checkpoint
-
 
 def minimize(
     system_data: dict,

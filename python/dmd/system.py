@@ -1,13 +1,8 @@
+from __future__ import annotations
 import json
-import tempfile
-import os
 import numpy as np
-from _dmd_core import (
-    SimulationConfig,
-    write_dmdin,
-    apply_json_config,
-    generate_config_template,
-)
+from _dmd_core import SimulationConfig
+from dmd.config import apply_config
 
 
 class SystemBuilder:
@@ -80,21 +75,11 @@ class SystemBuilder:
 
     def apply_config_json(self, path_or_dict: str | dict) -> "SystemBuilder":
         if isinstance(path_or_dict, dict):
-            with tempfile.NamedTemporaryFile(
-                mode="w", suffix=".json", delete=False
-            ) as f:
-                json.dump(path_or_dict, f)
-                tmppath = f.name
-            try:
-                apply_json_config(self.cfg, tmppath)
-            finally:
-                os.unlink(tmppath)
+            apply_config(self.cfg, path_or_dict)
         else:
-            apply_json_config(self.cfg, path_or_dict)
+            with open(path_or_dict) as f:
+                apply_config(self.cfg, json.load(f))
         return self
 
     def build(self) -> SimulationConfig:
         return self.cfg
-
-    def write_dmdin(self, path: str) -> None:
-        write_dmdin(path, self.cfg)

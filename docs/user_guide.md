@@ -10,7 +10,7 @@ Il software è composto da due livelli:
 
 - **Core C++** — motore di simulazione vero e proprio: integratore Velocity
   Verlet, forze (Lennard-Jones, Coulomb, PME, bonded), termostati, barostati,
-  checkpoint/restart, I/O in formato binario `.dmdin`.
+  checkpoint/restart.
 - **Python API** — interfaccia utente principale: costruzione del sistema,
   conversione da formati standard (PDB, PSF, GRO), lancio della simulazione,
   accesso ai risultati.
@@ -188,8 +188,9 @@ nascosti.
 
 Puoi generare un template completo con:
 
-```bash
-python3 -c "import dmd; print(dmd.generate_config_template())" > config.json
+```python
+import dmd
+print(dmd.generate_config_template())
 ```
 
 ### 5.1 Schema completo
@@ -592,9 +593,6 @@ builder = SystemBuilder(json_string)
 # Concatena config.json
 builder.apply_config_json(config_dict)
 builder.apply_config_json("config.json")
-
-# Scrivi .dmdin su disco
-builder.write_dmdin("system.dmdin")
 ```
 
 ### 8.2 `dmd.run()`
@@ -606,8 +604,6 @@ e restituisce un motore già eseguito.
 engine = dmd.run(
     system_data=system_dict,          # dict system.json
     config_data=config_dict,          # dict config.json
-    # Oppure:
-    dmdin_path="system.dmdin",        # file .dmdin precompilato
 )
 ```
 
@@ -669,21 +665,8 @@ engine.potential_energy  # float — energia potenziale (kJ/mol)
 ```python
 import dmd
 
-# I/O formato binario .dmdin
-dmd.write_dmdin("system.dmdin", cfg)
-cfg2 = dmd.read_dmdin("system.dmdin")
-
-# Config JSON
-dmd.apply_json_config(cfg, "config.json")
+# Template config
 template = dmd.generate_config_template()
-
-# Build diretto da array numpy
-cfg = dmd.build_cfg(
-    positions, masses, charges, atom_types,
-    box_size=3.0, dt=0.002, n_steps=1000,
-    lj_cutoff=1.2, init_temperature=300.0,
-    gen_vel=False, seed=42
-)
 ```
 
 ### 8.6 Convertitori
@@ -770,24 +753,7 @@ config = {
 }
 ```
 
-Per riprendere da un checkpoint, il workflow è:
-
-```python
-import dmd, json
-
-# Passo 1: carica config
-with open("config.json") as f:
-    cfg_json = json.load(f)
-
-# Passo 2: carica sistema dal .dmdin
-cfg = dmd.read_dmdin("system.dmdin")
-engine = dmd.Engine(cfg)
-
-# Imposta passo iniziale (dal checkpoint)
-# Nota: engine parte sempre da 0. Per restart completo serve
-# la funzione di checkpoint/restart del C++.
-engine.run()
-```
+Per riprendere da un checkpoint, usa `dmd.run(checkpoint="checkpoint.json", config_data=config)`
 
 > Il checkpoint C++ è bit-exact: riprendendo da un checkpoint si ottiene
 > la stessa traiettoria di una simulazione continua. Le variabili estese
@@ -919,52 +885,9 @@ r = |ri - rj|, k_b costante di forza, r0 lunghezza equilibrio.
 
 ---
 
-## 12. Appendice C: Formato binario .dmdin
+## 12. Appendice D: Best practices
 
-Il formato `.dmdin` è un formato binario compatto per la rappresentazione
-del sistema. Viene usato internamente come cache; gli utenti non dovrebbero
-mai aver bisogno di interagirci direttamente.
-
-### 12.1 Header (120 byte)
-
-| Offset | Byte | Tipo | Campo |
-|---|---|---|---|
-| 0 | 4 | uint32 | Magic: `0x444D444E` |
-| 4 | 4 | uint32 | Versione (1) |
-| 8 | 8 | uint64 | n_atoms |
-| 16 | 4 | uint32 | cell_type |
-| 20 | 4 | int32 | n_types |
-| 24 | 4 | uint32 | pos_flags |
-| 28 | 4 | uint32 | riservato |
-| 32 | 8 | uint64 | offset_ff |
-| 40 | 8 | uint64 | offset_pos |
-| 48 | 72 | double[9] | Matrice scatola |
-
-### 12.2 Sezioni
-
-**System** (dopo header):
-- masses (double × n_types)
-- charges (double × n_types)
-
-**Force field** (a offset_ff):
-- n_bonds, bond_i/j, bond_k/r0
-- n_angles, angle_i/j/k, angle_k_theta/theta0
-- n_dihedrals, dih_i/j/k/l, dih_per, dih_k_phi/phi0
-- n_lj_types, sigma (× n_types²), epsilon (× n_types²)
-
-**Posizioni** (a offset_pos):
-- pos_x/y/z (float × n_atoms)
-- vel_x/y/z (float × n_atoms, solo se pos_flags & 1)
-- atom_types (int32 × n_atoms)
-
-Posizioni e velocità sono in precisione 32-bit (float) per ridurre la
-dimensione del file. Vengono promosse a double al caricamento.
-
----
-
-## 13. Appendice D: Best practices
-
-### 13.1 Scelta del passo temporale
+### 12.1 Scelta del passo temporale
 
 | Sistema | dt raccomandato |
 |---|---|
@@ -972,7 +895,7 @@ dimensione del file. Vengono promosse a double al caricamento.
 | Con atomi H senza constraints | 0.001 ps |
 | Coarse-grained | 0.005 ps o più |
 
-### 13.2 Scelta dei cutoff
+### 12.2 Scelta dei cutoff
 
 | Interazione | Cutoff raccomandato |
 |---|---|
@@ -980,7 +903,7 @@ dimensione del file. Vengono promosse a double al caricamento.
 | Coulomb (cutoff) | Come LJ |
 | PME grid spacing | 0.10 – 0.15 nm, spline order 4 |
 
-### 13.3 Costanti di accoppiamento termostato/barostato
+### 12.3 Costanti di accoppiamento termostato/barostato
 
 | Scopo | τ termostato | τ barostato |
 |---|---|---|
@@ -989,12 +912,12 @@ dimensione del file. Vengono promosse a double al caricamento.
 
 Per produzione NPT: Nose-Hoover + Andersen barostat (ensemble più accurato).
 
-### 13.4 Checkpoint
+### 12.4 Checkpoint
 
 - Scrivi checkpoint ogni 500 – 5000 passi
 - Verifica sempre che restart riproduca traiettorie identiche
 
-### 13.5 Performance
+### 12.5 Performance
 
 - LJ e Coulomb direct dominano il costo computazionale (loop a coppie)
 - PME scala O(N log N) via FFT, più efficiente del direct sum per N > 2000
@@ -1002,7 +925,7 @@ Per produzione NPT: Nose-Hoover + Andersen barostat (ensemble più accurato).
 
 ---
 
-## 14. Appendice E: Structure del codice
+## 13. Appendice E: Struttura del codice
 
 ```
 dmd/
@@ -1012,6 +935,7 @@ dmd/
 │   │   ├── core.cpp           # Bindings pybind11 → _dmd_core.so
 │   │   ├── system.py          # SystemBuilder
 │   │   ├── runner.py          # run() orchestrator
+│   │   ├── config.py          # Config Parser (validate, apply)
 │   │   └── convert/
 │   │       ├── __init__.py
 │   │       ├── pdb.py         # Parse PDB
@@ -1019,12 +943,10 @@ dmd/
 │   │       └── gro.py         # Parse GRO
 │   └── pyproject.toml
 ├── src/                       # Core C++
-│   ├── sim/                   # Config, engine, integrator
+│   ├── sim/                   # SimulationEngine, checkpoin
 │   ├── force/                 # Forze (LJ, Coulomb, PME, bonded)
 │   ├── cell/                  # Cella di simulazione, neighbor list
-│   ├── sysbin/                # Formato .dmdin
 │   ├── thermo/                # Termostati
-│   ├── baro/                  # Barostati
-│   └── main/                  # CLI (dmd run / dmd config)
+│   └── baro/                  # Barostati
 └── tests/                     # Test C++ (Google Test)
 ```

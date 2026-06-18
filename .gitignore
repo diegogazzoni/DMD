@@ -16,3 +16,4 @@ session*
 .opencode/*
 design/*
 test_acqua/
+*.h5

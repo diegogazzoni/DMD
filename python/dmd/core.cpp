@@ -4,8 +4,6 @@
 
 #include "sim/simulation_config.h"
 #include "sim/simulation_engine.h"
-#include "sim/json_config.h"
-#include "sysbin/dmdin.h"
 #include "core/system_data.h"
 #include "core/cell.h"
 #include "trajectory/h5md_writer.h"
@@ -96,56 +94,6 @@ struct EngineWrapper {
     }
 };
 
-// Helper to build a SimulationConfig from Python-friendly structures
-static SimulationConfig build_cfg_from_py(
-    py::array_t<double> positions,
-    py::array_t<double> masses,
-    py::array_t<double> charges,
-    py::array_t<int32_t> atom_types,
-    double box_size,
-    double dt,
-    int n_steps,
-    double lj_cutoff,
-    double init_temperature,
-    bool gen_vel,
-    int seed)
-{
-    SimulationConfig cfg;
-    cfg.box_size = box_size;
-    cfg.dt = dt;
-    cfg.n_steps = n_steps;
-    cfg.lj_cutoff = lj_cutoff;
-    cfg.use_lj = true;
-    cfg.lj.n_types = 1;
-    cfg.lj.sigma = {0.3405};
-    cfg.lj.epsilon = {0.997};
-    cfg.init_temperature = init_temperature;
-    cfg.gen_vel = gen_vel;
-    cfg.seed = seed;
-
-    size_t n = static_cast<size_t>(positions.shape(0));
-    auto pos = positions.unchecked<2>();
-    for (size_t i = 0; i < n; ++i) {
-        cfg.pos_x.push_back(pos(i, 0));
-        cfg.pos_y.push_back(pos(i, 1));
-        cfg.pos_z.push_back(pos(i, 2));
-        cfg.vel_x.push_back(0.0);
-        cfg.vel_y.push_back(0.0);
-        cfg.vel_z.push_back(0.0);
-    }
-
-    auto m = masses.unchecked<1>();
-    auto c = charges.unchecked<1>();
-    auto t = atom_types.unchecked<1>();
-    for (size_t i = 0; i < n; ++i) {
-        cfg.masses.push_back(m(i));
-        cfg.charges.push_back(c(i));
-        cfg.atom_types.push_back(t(i));
-    }
-
-    return cfg;
-}
-
 PYBIND11_MODULE(_dmd_core, m) {
     m.doc() = "DMD molecular dynamics engine — C++ core bindings";
 
@@ -160,6 +108,21 @@ PYBIND11_MODULE(_dmd_core, m) {
         auto result = py::array_t<int>(sz, v.data());
         return result;
     };
+
+    // ---- Nested config types ----
+    py::class_<ThermostatConfig>(m, "ThermostatConfig")
+        .def(py::init<>())
+        .def_readwrite("type", &ThermostatConfig::type)
+        .def_readwrite("temperature", &ThermostatConfig::temperature)
+        .def_readwrite("tau", &ThermostatConfig::tau)
+        .def_readwrite("frequency", &ThermostatConfig::frequency);
+
+    py::class_<BarostatConfig>(m, "BarostatConfig")
+        .def(py::init<>())
+        .def_readwrite("type", &BarostatConfig::type)
+        .def_readwrite("pressure", &BarostatConfig::pressure)
+        .def_readwrite("tau", &BarostatConfig::tau)
+        .def_readwrite("compressibility", &BarostatConfig::compressibility);
 
     // ---- SimulationConfig binding ----
     py::class_<SimulationConfig>(m, "SimulationConfig")
@@ -186,6 +149,8 @@ PYBIND11_MODULE(_dmd_core, m) {
         .def_readwrite("ewald_coeff", &SimulationConfig::ewald_coeff)
         .def_readwrite("constraint_type", &SimulationConfig::constraint_type)
         .def_readwrite("constraint_tolerance", &SimulationConfig::constraint_tolerance)
+        .def_readwrite("thermostat", &SimulationConfig::thermostat)
+        .def_readwrite("barostat", &SimulationConfig::barostat)
         .def_readwrite("excl_i", &SimulationConfig::excl_i)
         .def_readwrite("excl_j", &SimulationConfig::excl_j)
         // Vectors as numpy arrays
@@ -291,30 +256,4 @@ PYBIND11_MODULE(_dmd_core, m) {
         .def_property_readonly("n_atoms", &EngineWrapper::n_atoms)
         .def_property_readonly("potential_energy", &EngineWrapper::potential_energy);
 
-    // ---- Free functions ----
-    m.def("read_dmdin", &read_dmdin, "Read a .dmdin binary file",
-          py::arg("path"));
-
-    m.def("write_dmdin", &write_dmdin, "Write a .dmdin binary file",
-          py::arg("path"), py::arg("cfg"));
-
-    m.def("apply_json_config", &apply_json_config,
-          "Apply a config.json to a SimulationConfig",
-          py::arg("cfg"), py::arg("path"));
-
-    m.def("generate_config_template", &generate_config_template,
-          "Generate a config.json template string");
-
-    m.def("build_cfg",
-          &build_cfg_from_py,
-          "Build a SimulationConfig from numpy arrays",
-          py::arg("positions"), py::arg("masses"),
-          py::arg("charges"), py::arg("atom_types"),
-          py::arg("box_size") = 3.0,
-          py::arg("dt") = 0.002,
-          py::arg("n_steps") = 1000,
-          py::arg("lj_cutoff") = 1.2,
-          py::arg("init_temperature") = 300.0,
-          py::arg("gen_vel") = false,
-          py::arg("seed") = 42);
 }

@@ -24,9 +24,7 @@ target_include_directories(_dmd_core
 target_link_libraries(_dmd_core
     PRIVATE
         dmd_sim
-        dmd_sysbin
         dmd_core
-        nlohmann_json::nlohmann_json
         ${HDF5_C_LIBRARIES}
 )
 

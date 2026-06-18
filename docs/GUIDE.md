@@ -109,8 +109,6 @@ DMD is organized in two layers:
 │     Checkpoint (binary)                 │  sim/checkpoint.cpp
 ├─────────────────────────────────────────┤
 │   Cell / SystemData / Constants         │  core/*.cpp
-│   .dmdin binary I/O                     │  sysbin/dmdin.cpp
-│   CLI (dmd run / dmd config)            │  main/main.cpp
 ├─────────────────────────────────────────┤
 │            C++ Core Layer               │
 └─────────────────────────────────────────┘
@@ -369,57 +367,15 @@ system = {
 
 ---
 
-## 4. The .dmdin Format
-
-The **.dmdin** format is a binary representation of the system, used internally
-as a cache by the CLI. Python users never use it directly: `SystemBuilder`
-produces an in-memory `SimulationConfig`.
-
-### File Structure
-
-**Header (120 bytes):**
-
-| Offset | Size | Type | Field |
-|---|---|---|---|
-| 0 | 4 | uint32 | Magic: `0x444D444E` ("DMDN") |
-| 4 | 4 | uint32 | Version (1) |
-| 8 | 8 | uint64 | n_atoms |
-| 16 | 4 | uint32 | cell_type |
-| 20 | 4 | int32 | n_types |
-| 24 | 4 | uint32 | pos_flags (bit 0: has velocities) |
-| 28 | 4 | uint32 | reserved |
-| 32 | 8 | uint64 | offset_ff |
-| 40 | 8 | uint64 | offset_pos |
-| 48 | 72 | double[9] | Box matrix 3×3 |
-
-**Sections:**
-- **System**: after header, per-type masses and charges (double × n_types)
-- **Force field** (at offset_ff): bonds, angles, dihedrals, LJ parameters
-- **Positions** (at offset_pos): coordinates (float × n_atoms), optional
-  velocities, atom types (int32 × n_atoms)
-
-Positions and velocities are stored as 32-bit floats to save space; they are
-promoted to double on reading.
-
-CLI usage:
-```bash
-# From the shell
-dmd run system.dmdin config.json
-
-# From Python (generating .dmdin)
-builder = dmd.SystemBuilder(system_dict)
-builder.write_dmdin("system.dmdin")
-cfg = dmd.read_dmdin("system.dmdin")
-```
-
 ---
 
-## 5. The config.json Format — All Parameters
+## 4. The config.json Format — All Parameters
 
 The **config.json** file contains ALL simulation parameters. The schema is
 **strict**: every key is mandatory. To generate a template:
-```bash
-python3 -c "import dmd; print(dmd.generate_config_template())"
+```python
+import dmd
+print(dmd.generate_config_template())
 ```
 
 ### 5.1 `run` Section — Execution Parameters
@@ -659,7 +615,7 @@ time step (dt = 0.001 ps).
 
 ---
 
-## 6. Running a Simulation — End-to-End
+## 5. Running a Simulation — End-to-End
 
 ### 6.1 Complete Workflow
 
@@ -770,19 +726,26 @@ T = 2.0 * ekin / (3.0 * len(masses) * kb)
 print(f"Final temperature: {T:.2f} K")
 ```
 
-### 6.5 From the Shell (CLI)
+### 5.5 Custom analysis
 
-```bash
-# Generate config template
-dmd config --template > config.json
+```python
+import numpy as np
 
-# Run simulation
-dmd run system.dmdin config.json
+# After engine.run():
+pos = np.array(engine.positions)
+vel = np.array(engine.velocities)
+masses = np.array(system["atoms"]["mass"])
+
+# Kinetic energy
+ekin = 0.5 * np.sum(masses * np.sum(vel**2, axis=1))
+
+# Instantaneous temperature
+kb = 0.008314462618  # kJ/(mol·K)
+T = 2.0 * ekin / (3.0 * len(masses) * kb)
+print(f"Temperature: {T:.2f} K")
 ```
 
-Using the CLI requires a `.dmdin` file generated with `SystemBuilder.write_dmdin()`.
-
-### 6.6 Energy Minimization
+### 5.6 Energy Minimization
 
 Before a production simulation, it is good practice to **minimize the energy**
 to remove unfavorable steric contacts:
@@ -810,7 +773,7 @@ The algorithm is **steepest descent with backtracking**: if energy increases,
 the step is reduced (×0.5); if it decreases, the step is increased (×1.2).
 Converges when the energy change falls below `energy_tol` or `n_steps` is reached.
 
-### 6.7 Example: TIP3P Water
+### 5.7 Example: TIP3P Water
 
 The complete example for a TIP3P water box (522 molecules, 1566 atoms) is in
 `test_acqua/`:
@@ -837,9 +800,9 @@ TIP3P parameters used:
 
 ---
 
-## 7. Algorithms in Detail
+## 6. Algorithms in Detail
 
-### 7.1 Velocity Verlet Integrator
+### 6.1 Velocity Verlet Integrator
 
 DMD uses the **Velocity Verlet** integrator, a symplectic (energy-conserving)
 and time-reversible algorithm:
@@ -873,7 +836,7 @@ for step in range(n_steps):
     checkpoint.save(state)                  # periodic checkpoint
 ```
 
-### 7.2 Nose-Hoover Thermostat
+### 6.2 Nose-Hoover Thermostat
 
 The **Nose-Hoover** thermostat extends the system with an additional degree of
 freedom ζ (friction coefficient). The equations of motion are:
@@ -889,7 +852,7 @@ where `Q = N_f · k_B · T₀ · τ²` is the thermostat mass.
 In DMD, the thermostat is applied during the second half of the Velocity Verlet
 step using a split-operator approach (half before half-kick, half after).
 
-### 7.3 PME (Particle Mesh Ewald)
+### 6.3 PME (Particle Mesh Ewald)
 
 Electrostatics is the computationally most expensive term. Ewald summation
 splits the Coulomb 1/r potential into two rapidly converging parts:
@@ -923,7 +886,7 @@ For N > 2000, PME is faster than direct sum at equal accuracy.
 and 1-3 pairs that must be excluded. The `CoulombExclusion` component subtracts
 the `q_i·q_j/r` term for excluded pairs after the PME calculation.
 
-### 7.4 Verlet List
+### 6.4 Verlet List
 
 For short-range interactions (LJ and direct Coulomb), DMD maintains a
 **Verlet list** (neighbor list within cutoff + skin distance). The list is
@@ -931,7 +894,7 @@ rebuilt every 10 steps to balance correctness (atoms cannot travel more than
 the skin distance in 10 steps) and computational cost (O(N²) to rebuild,
 O(N·M) to compute forces).
 
-### 7.5 Steepest Descent Minimization
+### 6.5 Steepest Descent Minimization
 
 ```python
 info = dmd.minimize(system_data, n_steps=500, step_size=0.001, energy_tol=0.01)
@@ -946,7 +909,7 @@ The algorithm:
 
 ---
 
-## 8. The H5MD Format
+## 7. The H5MD Format
 
 H5MD (**HDF5 Molecular Dynamics**) is an open standard for storing MD trajectories
 based on HDF5. It was developed by the community as an open alternative to
@@ -1026,7 +989,7 @@ for ts in u.trajectory:
 
 ---
 
-## 9. Checkpoint and Restart
+## 8. Checkpoint and Restart
 
 ### 9.1 Python Checkpoint (JSON)
 
@@ -1090,7 +1053,7 @@ eng2 = dmd.run(checkpoint="checkpoint.bin", config_data=config_npt)
 
 ---
 
-## 10. Appendix: Best Practices
+## 9. Appendix: Best Practices
 
 ### Choosing the Time Step (dt)
 
@@ -1138,7 +1101,7 @@ eng2 = dmd.run(checkpoint="checkpoint.bin", config_data=config_npt)
 
 ---
 
-## 11. Appendix: Unit Conversion Summary
+## 10. Appendix: Unit Conversion Summary
 
 ### CHARMM → DMD (performed automatically by charmm.py)
 

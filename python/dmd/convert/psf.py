@@ -1,3 +1,4 @@
+from __future__ import annotations
 """PSF (Protein Structure File) parser — produces bonds, angles, dihedrals, impropers + atom types + exclusions."""
 
 

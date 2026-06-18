@@ -254,3 +254,36 @@
 - **Visualizzazione:** script `test_acqua/visualize_vdw.py` → MP4 con O (rosso) e H (bianco/grigio), Z-sorted, VDW-like scatter
 - **Infrastruttura:** `.gitignore` aggiornato con `test_acqua/*`
 - **Gate:** —
+
+### 2026-06-18 — Refactor: rimozione .dmdin, CLI, json_config C++
+
+- **Decisione architetturale:** eliminati tre strati intermedi:
+  - `.dmdin` formato binario (ridondante: system.json è l'unico formato input)
+  - CLI standalone (`src/main/`) — tutto passa da Python
+  - `json_config` in C++ (`src/sim/`) — C++ non sa più di JSON
+- **File creati:**
+  - `python/dmd/config.py` — parser config.json Python puro:
+    - `validate_config()` (replica strict schema)
+    - `apply_config()` (setta campi SimulationConfig via pybind11)
+    - `generate_config_template()` (template JSON)
+- **File eliminati:**
+  - `src/sysbin/` (dmdin.h, dmdin.cpp, CMakeLists.txt)
+  - `src/main/` (main.cpp, CMakeLists.txt)
+  - `src/sim/json_config.h`, `src/sim/json_config.cpp`
+  - `tests/unit/sysbin/` (test_dmdin.cpp)
+  - `tests/integration/test_production.cpp`
+- **File modificati:**
+  - `python/dmd/core.cpp` — rimossi 5 bindings morti (read/write_dmdin, apply_json_config, generate_config_template, build_cfg). Aggiunti bindings per ThermostatConfig e BarostatConfig (sub-oggetti di SimulationConfig).
+  - `python/dmd/system.py` — `apply_config_json()` ora usa `config.py` invece di C++. Rimosso `write_dmdin()`.
+  - `python/dmd/runner.py` — rimossi `dmdin_path`, `output_dmdin`. Usa `config.py`.
+  - `python/dmd/__init__.py` — rimossi 5 exports morti, aggiunti exports da `config.py`.
+  - `python/dmd/minimizer.py`, `python/dmd/convert/psf.py` — aggiunto `from __future__ import annotations` per compatibilità Python 3.9.
+  - Tutti i CMakeLists.txt — rimossi target `dmd_sysbin`, `dmd_main`, `nlohmann_json`.
+  - `CMakeLists.txt` radice — rimosso FetchContent nlohmann_json.
+- **Documentazione:**
+  - `README.md` — riscritto: rimosso .dmdin, CLI, nlohmann-json. Quick start ora usa Python.
+  - `docs/user_guide.md` — rimosse sezioni .dmdin, appendice C, CLI reference.
+  - `docs/GUIDA.md`, `docs/GUIDE.md` — rimosso formato .dmdin, rinum. sezioni.
+  - `docs/graph.md` — nuovo grafo completo delle dipendenze (mermaid).
+- **Test C++:** 18/18 passano (erano 20, rimossi 2: test_dmdin, test_production)
+- **Test Python:** tutti i percorsi verificati: config, system builder, run (con/senza progress), H5MD, checkpoint/restart, minimizer

@@ -114,8 +114,6 @@ DMD è organizzato su due livelli:
 │     Checkpoint (binario)                │  sim/checkpoint.cpp
 ├─────────────────────────────────────────┤
 │   Cell / SystemData / Constants         │  core/*.cpp
-│   .dmdin binary I/O                     │  sysbin/dmdin.cpp
-│   CLI (dmd run / dmd config)            │  main/main.cpp
 ├─────────────────────────────────────────┤
 │            C++ Core Layer               │
 └─────────────────────────────────────────┘
@@ -374,57 +372,15 @@ system = {
 
 ---
 
-## 4. Formato .dmdin
-
-Il formato **.dmdin** è una rappresentazione binaria del sistema, usata
-internamente come cache dal CLI. Gli utenti Python non lo usano mai
-direttamente: il `SystemBuilder` produce `SimulationConfig` in memoria.
-
-### Struttura del file
-
-**Header (120 byte):**
-
-| Offset | Dimensione | Tipo | Campo |
-|---|---|---|---|
-| 0 | 4 | uint32 | Magic: `0x444D444E` ("DMDN") |
-| 4 | 4 | uint32 | Versione (1) |
-| 8 | 8 | uint64 | n_atoms |
-| 16 | 4 | uint32 | cell_type |
-| 20 | 4 | int32 | n_types |
-| 24 | 4 | uint32 | pos_flags (bit 0: ha velocità) |
-| 28 | 4 | uint32 | riservato |
-| 32 | 8 | uint64 | offset_ff |
-| 40 | 8 | uint64 | offset_pos |
-| 48 | 72 | double[9] | Matrice box 3×3 |
-
-**Sezioni:**
-- **System**: dopo l'header, masse e cariche per tipo (double × n_types)
-- **Force field** (a offset_ff): legami, angoli, diedri, parametri LJ
-- **Posizioni** (a offset_pos): coordinate (float × n_atoms), velocità opzionali,
-  tipi atomici (int32 × n_atoms)
-
-Posizioni e velocità in float 32-bit per risparmiare spazio; vengono promosse
-a double all'atto della lettura.
-
-Il CLI usa .dmdin con:
-```bash
-# Dalla shell
-dmd run system.dmdin config.json
-
-# Da Python (generazione .dmdin)
-builder = dmd.SystemBuilder(system_dict)
-builder.write_dmdin("system.dmdin")
-cfg = dmd.read_dmdin("system.dmdin")
-```
-
 ---
 
-## 5. Formato config.json — Tutti i Parametri
+## 4. Formato config.json — Tutti i Parametri
 
 Il file **config.json** contiene TUTTI i parametri della simulazione.
 Lo schema è **stretto**: ogni chiave è obbligatoria. Per generare un template:
-```bash
-python3 -c "import dmd; print(dmd.generate_config_template())"
+```python
+import dmd
+print(dmd.generate_config_template())
 ```
 
 ### 5.1 Sezione `run` — Parametri di esecuzione
@@ -669,7 +625,7 @@ passo piccolo (dt = 0.001 ps) o congelati.
 
 ---
 
-## 6. Eseguire una Simulazione — End-to-End
+## 5. Eseguire una Simulazione — End-to-End
 
 ### 6.1 Flusso completo
 
@@ -784,19 +740,24 @@ T = 2.0 * ekin / (3.0 * len(masses) * kb)
 print(f"Temperatura finale: {T:.2f} K")
 ```
 
-### 6.5 Dalla shell (CLI)
+### 5.5 Script minimale minimizzazione + produzione
 
-```bash
-# Genera template config
-dmd config --template > config.json
+```python
+import dmd
 
-# Esegui simulazione
-dmd run system.dmdin config.json
+# Minimizza
+info = dmd.minimize(system, n_steps=500, output={"checkpoint_path": "min.json"})
+
+# Equilibra NVT
+config_nvt = { ... thermostat: "nose-hoover" ... }
+eng = dmd.run(checkpoint="min.json", config_data=config_nvt)
+
+# Produzione NPT
+config_npt = { ... thermostat: "nose-hoover", barostat: "andersen" ... }
+eng2 = dmd.run(checkpoint="checkpoint.bin", config_data=config_npt)
 ```
 
-Per usare il CLI serve un file `.dmdin` generato con `SystemBuilder.write_dmdin()`.
-
-### 6.6 Minimizzazione energetica
+### 5.6 Minimizzazione energetica
 
 Prima di una simulazione di produzione, è buona pratica **minimizzare l'energia**
 del sistema per rimuovere contatti sterici sfavorevoli:
@@ -825,7 +786,7 @@ il passo viene ridotto (×0.5); se diminuisce, il passo viene aumentato (×1.2).
 L'ottimizzazione si ferma quando la variazione di energia scende sotto
 `energy_tol` o quando si raggiunge `n_steps`.
 
-### 6.7 Esempio: Acqua TIP3P
+### 5.7 Esempio: Acqua TIP3P
 
 L'esempio completo per una scatola d'acqua TIP3P (522 molecole, 1566 atomi)
 si trova in `test_acqua/`:
@@ -852,9 +813,9 @@ Parametri TIP3P usati:
 
 ---
 
-## 7. Algoritmi in Dettaglio
+## 6. Algoritmi in Dettaglio
 
-### 7.1 Integratore Velocity Verlet
+### 6.1 Integratore Velocity Verlet
 
 DMD usa l'integratore **Velocity Verlet**, un algoritmo simplettico (conserva
 l'energia) e reversibile nel tempo:
@@ -888,7 +849,7 @@ for step in range(n_steps):
     checkpoint.save(state)                  # checkpoint periodico
 ```
 
-### 7.2 Termostato Nose-Hoover
+### 6.2 Termostato Nose-Hoover
 
 Il termostato di **Nose-Hoover** estende il sistema con un grado di libertà
 aggiuntivo ζ (coefficiente di frizione). Le equazioni del moto sono:
@@ -904,7 +865,7 @@ dove `Q = N_f · k_B · T₀ · τ²` è la massa del termostato.
 In DMD, il termostato viene applicato alla seconda metà del Velocity Verlet
 con un passo di integrazione split-operator (metà prima di half-kick, metà dopo).
 
-### 7.3 PME (Particle Mesh Ewald)
+### 6.3 PME (Particle Mesh Ewald)
 
 L'elettrostatica è il termine computazionalmente più costoso. La somma di
 Ewald separa il potenziale Coulombiano 1/r in due parti che convergono
@@ -941,7 +902,7 @@ anche quelle 1-2 e 1-3 che devono essere escluse. Il componente
 `CoulombExclusion` sottrae il termine `q_i·q_j/r` per le coppie escluse
 dopo il calcolo PME.
 
-### 7.4 Lista di Verlet
+### 6.4 Lista di Verlet
 
 Per le interazioni a corto raggio (LJ e Coulomb direct), DMD mantiene una
 **lista di Verlet** (lista di vicini entro cutoff + skin distance).
@@ -949,7 +910,7 @@ La lista viene ricostruita ogni 10 passi per bilanciare correttezza
 (gli atomi non possono percorrere più della skin distance in 10 passi)
 e costo computazionale (O(N²) per ricostruire, O(N·M) per calcolare).
 
-### 7.5 Minimizzazione Steepest Descent
+### 6.5 Minimizzazione Steepest Descent
 
 ```python
 info = dmd.minimize(system_data, n_steps=500, step_size=0.001, energy_tol=0.01)
@@ -964,7 +925,7 @@ L'algoritmo:
 
 ---
 
-## 8. Il Formato H5MD
+## 7. Il Formato H5MD
 
 H5MD (**HDF5 Molecular Dynamics**) è uno standard aperto per la memorizzazione
 di traiettorie MD basato su HDF5. È stato sviluppato dalla comunità come
@@ -1045,7 +1006,7 @@ for ts in u.trajectory:
 
 ---
 
-## 9. Checkpoint e Restart
+## 8. Checkpoint e Restart
 
 ### 9.1 Checkpoint in Python (JSON)
 
@@ -1109,7 +1070,7 @@ eng2 = dmd.run(checkpoint="checkpoint.bin", config_data=config_npt)
 
 ---
 
-## 10. Appendice: Best Practices
+## 9. Appendice: Best Practices
 
 ### Scelta del passo temporale (dt)
 
@@ -1157,7 +1118,7 @@ eng2 = dmd.run(checkpoint="checkpoint.bin", config_data=config_npt)
 
 ---
 
-## 11. Appendice: Riepilogo Conversioni Unità
+## 10. Appendice: Riepilogo Conversioni Unità
 
 ### CHARMM → DMD (eseguito automaticamente da charmm.py)
 
