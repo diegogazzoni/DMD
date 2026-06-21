@@ -25,3 +25,7 @@ add_test(NAME test_force_engine COMMAND test_force_engine)
 add_executable(test_coulomb_pme test_coulomb_pme.cpp)
 target_link_libraries(test_coulomb_pme PRIVATE dmd_force gtest_main)
 add_test(NAME test_coulomb_pme COMMAND test_coulomb_pme)
+
+add_executable(test_harmonic_improper test_harmonic_improper.cpp)
+target_link_libraries(test_harmonic_improper PRIVATE dmd_force gtest_main)
+add_test(NAME test_harmonic_improper COMMAND test_harmonic_improper)

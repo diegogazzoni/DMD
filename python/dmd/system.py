@@ -63,6 +63,40 @@ class SystemBuilder:
             if "r0" in bonds[0]:
                 self.cfg.bond_r0 = np.array([b.get("r0", 0.0) for b in bonds], dtype=np.float64)
 
+        angles = ff.get("angles", [])
+        if angles:
+            self.cfg.angle_i = np.array([a["i"] for a in angles], dtype=np.int32)
+            self.cfg.angle_j = np.array([a["j"] for a in angles], dtype=np.int32)
+            self.cfg.angle_k = np.array([a["k"] for a in angles], dtype=np.int32)
+            if "k_theta" in angles[0]:
+                self.cfg.angle_k_theta = np.array([a.get("k_theta", 0.0) for a in angles], dtype=np.float64)
+            if "theta0" in angles[0]:
+                self.cfg.angle_theta0 = np.array([a.get("theta0", 0.0) for a in angles], dtype=np.float64)
+
+        dihedrals = ff.get("dihedrals", [])
+        if dihedrals:
+            self.cfg.dihedral_i = np.array([d["i"] for d in dihedrals], dtype=np.int32)
+            self.cfg.dihedral_j = np.array([d["j"] for d in dihedrals], dtype=np.int32)
+            self.cfg.dihedral_k = np.array([d["k"] for d in dihedrals], dtype=np.int32)
+            self.cfg.dihedral_l = np.array([d["l"] for d in dihedrals], dtype=np.int32)
+            if "k_phi" in dihedrals[0]:
+                self.cfg.dihedral_k_phi = np.array([d.get("k_phi", 0.0) for d in dihedrals], dtype=np.float64)
+            if "periodicity" in dihedrals[0]:
+                self.cfg.dihedral_periodicity = np.array([d.get("periodicity", 1) for d in dihedrals], dtype=np.int32)
+            if "phi0" in dihedrals[0]:
+                self.cfg.dihedral_phi0 = np.array([d.get("phi0", 0.0) for d in dihedrals], dtype=np.float64)
+
+        impropers = ff.get("impropers", [])
+        if impropers:
+            self.cfg.improper_i = np.array([im["i"] for im in impropers], dtype=np.int32)
+            self.cfg.improper_j = np.array([im["j"] for im in impropers], dtype=np.int32)
+            self.cfg.improper_k = np.array([im["k"] for im in impropers], dtype=np.int32)
+            self.cfg.improper_l = np.array([im["l"] for im in impropers], dtype=np.int32)
+            if "k_phi" in impropers[0]:
+                self.cfg.improper_k_phi = np.array([im.get("k_phi", 0.0) for im in impropers], dtype=np.float64)
+            if "phi0" in impropers[0]:
+                self.cfg.improper_phi0 = np.array([im.get("phi0", 0.0) for im in impropers], dtype=np.float64)
+
         constraints = ff.get("constraints", [])
         if constraints:
             self.cfg.constraint_i = [c["i"] for c in constraints]

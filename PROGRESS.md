@@ -330,3 +330,28 @@
   - `test_water_properties.py` — TIP3P SHAKE: geometria perfetta, PE stabile (~1015 kJ/mol)
 - **C++ test:** 18/18 passano
 - **Gate:** —
+
+### 2026-06-21 — Pipeline bonded completo (Fase 8A): HarmonicImproper, binding angle/dihedral/improper
+
+- **Nuovo componente C++:** `src/force/harmonic_improper.h/.cpp`
+  - `ImproperParams` struct con i/j/k/l, k_phi, phi0
+  - `HarmonicImproper` force component: E = 0.5·k·(χ−χ₀)², forze analitiche via gradienti dihedral
+- **SimulationConfig esteso:** aggiunto `ImproperParams` + `std::vector<ImproperParams> impropers`
+- **build_force_engine():** loop per creare `HarmonicImproper` da `cfg.impropers`
+- **pybind11 bindings** (`core.cpp`): esposti 20 nuove property:
+  - `angle_i/j/k`, `angle_k_theta`, `angle_theta0`
+  - `dihedral_i/j/k/l`, `dihedral_k_phi`, `dihedral_periodicity`, `dihedral_phi0`
+  - `improper_i/j/k/l`, `improper_k_phi`, `improper_phi0`
+- **system.py:** lettura angle, dihedral, improper dal merged FF (stesso pattern di bonds)
+- **CHARMM parser** (`charmm.py`):
+  - Aggiunto parametro `convert_units=False` per backward compat
+  - `convert_units=True`: bond kcal·Å⁻²→kJ·nm⁻², angle/dihedral/improper kcal→kJ, deg→rad
+  - Fix: dihedral/improper phi0 ora convertito degrees→radians
+  - Fix: bond k convertito kcal/mol/Å² → kJ/(mol·nm²)
+- **Test C++:** `tests/unit/force/test_harmonic_improper.cpp` — 4 test: planar eq, non-planar energia, somma forze=0, multi-improper
+- **Test validazione:** `tests/validation/test_bonded_pipeline.py`
+  - Test 1: 4 atomi con bonds+angle+dihedral+improper → PE ragionevole (8547 kJ/mol)
+  - Test 2: NVE 1000 step con bonds+angle+dihedral → energia conservata
+- **C++ test:** 19/19 passano (aggiunto test_harmonic_improper)
+- **Test validazione:** tutti 5 passano (NVE, equipartition, Boltzmann, water, bonded pipeline)
+- **Gate:** —

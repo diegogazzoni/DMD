@@ -5,6 +5,7 @@
 #include "force/harmonic_bond.h"
 #include "force/harmonic_angle.h"
 #include "force/periodic_dihedral.h"
+#include "force/harmonic_improper.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -48,6 +49,7 @@ struct SimulationConfig {
     std::vector<HarmonicBondParams> bonds;
     std::vector<HarmonicAngleParams> angles;
     std::vector<PeriodicDihedralParams> dihedrals;
+    std::vector<ImproperParams> impropers;
 
     // Electrostatics
     std::string coulomb_type{"cutoff"};

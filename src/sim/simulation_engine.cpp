@@ -4,6 +4,7 @@
 #include "force/force_engine.h"
 #include "force/force_component.h"
 #include "force/lennard_jones.h"
+#include "force/harmonic_improper.h"
 #include "force/coulomb_direct.h"
 #include "force/coulomb_pme.h"
 #include "force/coulomb_exclusion.h"
@@ -159,6 +160,9 @@ std::unique_ptr<ForceEngine> build_force_engine(const SimulationConfig& cfg) {
     }
     for (auto& d : cfg.dihedrals) {
         fe->add_component(std::make_unique<PeriodicDihedral>(d));
+    }
+    for (auto& im : cfg.impropers) {
+        fe->add_component(std::make_unique<HarmonicImproper>(im));
     }
 
     if (cfg.coulomb_type == "direct" || cfg.coulomb_type == "cutoff") {

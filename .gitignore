@@ -17,4 +17,5 @@ session*
 .opencode/*
 design/*
 test_acqua/
+test_alanine/
 *.h5

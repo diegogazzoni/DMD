@@ -243,6 +243,174 @@ PYBIND11_MODULE(_dmd_core, m) {
             [](SimulationConfig& c, py::array_t<double> a) {
                 if (c.bonds.empty()) c.bonds.resize(1);
                 c.bonds[0].r0.assign(a.data(), a.data() + a.size());
+            })
+        // Angles (empty if no angles)
+        .def_property("angle_i",
+            [&](SimulationConfig& c) {
+                if (c.angles.empty()) return py::array_t<int>();
+                return vec_to_arr_i(c.angles[0].i);
+            },
+            [](SimulationConfig& c, py::array_t<int> a) {
+                if (c.angles.empty()) c.angles.resize(1);
+                c.angles[0].i.assign(a.data(), a.data() + a.size());
+                c.angles[0].n = a.size();
+            })
+        .def_property("angle_j",
+            [&](SimulationConfig& c) {
+                if (c.angles.empty()) return py::array_t<int>();
+                return vec_to_arr_i(c.angles[0].j);
+            },
+            [](SimulationConfig& c, py::array_t<int> a) {
+                if (c.angles.empty()) c.angles.resize(1);
+                c.angles[0].j.assign(a.data(), a.data() + a.size());
+            })
+        .def_property("angle_k",
+            [&](SimulationConfig& c) {
+                if (c.angles.empty()) return py::array_t<int>();
+                return vec_to_arr_i(c.angles[0].k);
+            },
+            [](SimulationConfig& c, py::array_t<int> a) {
+                if (c.angles.empty()) c.angles.resize(1);
+                c.angles[0].k.assign(a.data(), a.data() + a.size());
+            })
+        .def_property("angle_k_theta",
+            [&](SimulationConfig& c) {
+                if (c.angles.empty()) return py::array_t<double>();
+                return vec_to_arr_d(c.angles[0].k_theta);
+            },
+            [](SimulationConfig& c, py::array_t<double> a) {
+                if (c.angles.empty()) c.angles.resize(1);
+                c.angles[0].k_theta.assign(a.data(), a.data() + a.size());
+            })
+        .def_property("angle_theta0",
+            [&](SimulationConfig& c) {
+                if (c.angles.empty()) return py::array_t<double>();
+                return vec_to_arr_d(c.angles[0].theta0);
+            },
+            [](SimulationConfig& c, py::array_t<double> a) {
+                if (c.angles.empty()) c.angles.resize(1);
+                c.angles[0].theta0.assign(a.data(), a.data() + a.size());
+            })
+        // Dihedrals (empty if no dihedrals)
+        .def_property("dihedral_i",
+            [&](SimulationConfig& c) {
+                if (c.dihedrals.empty()) return py::array_t<int>();
+                return vec_to_arr_i(c.dihedrals[0].i);
+            },
+            [](SimulationConfig& c, py::array_t<int> a) {
+                if (c.dihedrals.empty()) c.dihedrals.resize(1);
+                c.dihedrals[0].i.assign(a.data(), a.data() + a.size());
+                c.dihedrals[0].n = a.size();
+            })
+        .def_property("dihedral_j",
+            [&](SimulationConfig& c) {
+                if (c.dihedrals.empty()) return py::array_t<int>();
+                return vec_to_arr_i(c.dihedrals[0].j);
+            },
+            [](SimulationConfig& c, py::array_t<int> a) {
+                if (c.dihedrals.empty()) c.dihedrals.resize(1);
+                c.dihedrals[0].j.assign(a.data(), a.data() + a.size());
+            })
+        .def_property("dihedral_k",
+            [&](SimulationConfig& c) {
+                if (c.dihedrals.empty()) return py::array_t<int>();
+                return vec_to_arr_i(c.dihedrals[0].k);
+            },
+            [](SimulationConfig& c, py::array_t<int> a) {
+                if (c.dihedrals.empty()) c.dihedrals.resize(1);
+                c.dihedrals[0].k.assign(a.data(), a.data() + a.size());
+            })
+        .def_property("dihedral_l",
+            [&](SimulationConfig& c) {
+                if (c.dihedrals.empty()) return py::array_t<int>();
+                return vec_to_arr_i(c.dihedrals[0].l);
+            },
+            [](SimulationConfig& c, py::array_t<int> a) {
+                if (c.dihedrals.empty()) c.dihedrals.resize(1);
+                c.dihedrals[0].l.assign(a.data(), a.data() + a.size());
+            })
+        .def_property("dihedral_k_phi",
+            [&](SimulationConfig& c) {
+                if (c.dihedrals.empty()) return py::array_t<double>();
+                return vec_to_arr_d(c.dihedrals[0].k_phi);
+            },
+            [](SimulationConfig& c, py::array_t<double> a) {
+                if (c.dihedrals.empty()) c.dihedrals.resize(1);
+                c.dihedrals[0].k_phi.assign(a.data(), a.data() + a.size());
+            })
+        .def_property("dihedral_periodicity",
+            [&](SimulationConfig& c) {
+                if (c.dihedrals.empty()) return py::array_t<int>();
+                return vec_to_arr_i(c.dihedrals[0].periodicity);
+            },
+            [](SimulationConfig& c, py::array_t<int> a) {
+                if (c.dihedrals.empty()) c.dihedrals.resize(1);
+                c.dihedrals[0].periodicity.assign(a.data(), a.data() + a.size());
+            })
+        .def_property("dihedral_phi0",
+            [&](SimulationConfig& c) {
+                if (c.dihedrals.empty()) return py::array_t<double>();
+                return vec_to_arr_d(c.dihedrals[0].phi0);
+            },
+            [](SimulationConfig& c, py::array_t<double> a) {
+                if (c.dihedrals.empty()) c.dihedrals.resize(1);
+                c.dihedrals[0].phi0.assign(a.data(), a.data() + a.size());
+            })
+        // Impropers (empty if no impropers)
+        .def_property("improper_i",
+            [&](SimulationConfig& c) {
+                if (c.impropers.empty()) return py::array_t<int>();
+                return vec_to_arr_i(c.impropers[0].i);
+            },
+            [](SimulationConfig& c, py::array_t<int> a) {
+                if (c.impropers.empty()) c.impropers.resize(1);
+                c.impropers[0].i.assign(a.data(), a.data() + a.size());
+                c.impropers[0].n = a.size();
+            })
+        .def_property("improper_j",
+            [&](SimulationConfig& c) {
+                if (c.impropers.empty()) return py::array_t<int>();
+                return vec_to_arr_i(c.impropers[0].j);
+            },
+            [](SimulationConfig& c, py::array_t<int> a) {
+                if (c.impropers.empty()) c.impropers.resize(1);
+                c.impropers[0].j.assign(a.data(), a.data() + a.size());
+            })
+        .def_property("improper_k",
+            [&](SimulationConfig& c) {
+                if (c.impropers.empty()) return py::array_t<int>();
+                return vec_to_arr_i(c.impropers[0].k);
+            },
+            [](SimulationConfig& c, py::array_t<int> a) {
+                if (c.impropers.empty()) c.impropers.resize(1);
+                c.impropers[0].k.assign(a.data(), a.data() + a.size());
+            })
+        .def_property("improper_l",
+            [&](SimulationConfig& c) {
+                if (c.impropers.empty()) return py::array_t<int>();
+                return vec_to_arr_i(c.impropers[0].l);
+            },
+            [](SimulationConfig& c, py::array_t<int> a) {
+                if (c.impropers.empty()) c.impropers.resize(1);
+                c.impropers[0].l.assign(a.data(), a.data() + a.size());
+            })
+        .def_property("improper_k_phi",
+            [&](SimulationConfig& c) {
+                if (c.impropers.empty()) return py::array_t<double>();
+                return vec_to_arr_d(c.impropers[0].k_phi);
+            },
+            [](SimulationConfig& c, py::array_t<double> a) {
+                if (c.impropers.empty()) c.impropers.resize(1);
+                c.impropers[0].k_phi.assign(a.data(), a.data() + a.size());
+            })
+        .def_property("improper_phi0",
+            [&](SimulationConfig& c) {
+                if (c.impropers.empty()) return py::array_t<double>();
+                return vec_to_arr_d(c.impropers[0].phi0);
+            },
+            [](SimulationConfig& c, py::array_t<double> a) {
+                if (c.impropers.empty()) c.impropers.resize(1);
+                c.impropers[0].phi0.assign(a.data(), a.data() + a.size());
             });
 
     // ---- Engine wrapper ----

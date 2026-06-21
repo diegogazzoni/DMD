@@ -13,6 +13,7 @@ add_library(dmd_force
     harmonic_bond.cpp
     harmonic_angle.cpp
     periodic_dihedral.cpp
+    harmonic_improper.cpp
     lennard_jones.cpp
     coulomb_direct.cpp
     coulomb_pme.cpp
