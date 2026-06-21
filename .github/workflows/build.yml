@@ -1,0 +1,42 @@
+name: Build and Test
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          brew install fftw hdf5 cmake python@3.14
+
+      - name: Setup Python venv
+        run: |
+          python3.14 -m venv .venv
+          source .venv/bin/activate
+          pip install numpy h5py
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build C++
+        run: |
+          cmake --build build -j$(sysctl -n hw.ncpu)
+
+      - name: Run C++ tests
+        run: |
+          cd build && ctest --output-on-failure
+
+      - name: Build Python bindings
+        run: |
+          cmake --build build --target _dmd_core -j$(sysctl -n hw.ncpu)
+
+      - name: Run validation tests
+        run: |
+          source .venv/bin/activate
+          python tests/validation/test_nve_drift.py
+          python tests/validation/test_equipartition.py
+          python tests/validation/test_boltzmann.py

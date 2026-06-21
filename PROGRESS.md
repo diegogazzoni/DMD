@@ -309,3 +309,24 @@
 - **Test acqua SHAKE:** 500 step, dt=1 fs: PE~1015 kJ/mol (solo LJ+Coulomb, niente bonds), geometria perfetta (O–H=0.09572, H–H=0.15139, angolo=104.52°)
   - Test con dt=2 fs: funziona, ns/day 12.7 vs 6.5, geometria identica
 - **Gate:** —
+
+### 2026-06-18 — Architecture docs (C4 Model), ADRs, CI/CD, validation tests
+
+- **Architettura C4 Model (standard industriale):**
+  - `docs/context.md` — C4 Level 1: sistema, utenti, input/output, dipendenze (mermaid)
+  - `docs/containers.md` — C4 Level 2: Python API → pybind11 → C++ Core → dipendenze (mermaid)
+  - `docs/components.md` — C4 Level 3: step loop, force components, ensemble controllers, I/O (mermaid)
+  - `ARCHITECTURE.md` — aggiornato con riferimenti incrociati ai diagrammi C4
+- **ADRs (Architecture Decision Records):**
+  - `docs/adr/0001-use-pybind11-for-python-bindings.md`
+  - `docs/adr/0002-use-pme-for-electrostatics.md`
+  - `docs/adr/0003-replace-binary-dmdin-with-json.md`
+  - `docs/adr/0004-use-shake-for-water.md`
+- **CI/CD:** `.github/workflows/build.yml` — GitHub Actions: build C++, ctest, build bindings, validation tests
+- **Test di validazione fisica:** `tests/validation/`
+  - `test_nve_drift.py` — NVE Argon 216 atomi: PE+KE stabili dopo 5000 step
+  - `test_equipartition.py` — NVT Argon 216 atomi: ⟨KE⟩ = 3/2 kT entro 7%
+  - `test_boltzmann.py` — NVT Argon 512 atomi: distribuzione Maxwell-Boltzmann, T entro 6%
+  - `test_water_properties.py` — TIP3P SHAKE: geometria perfetta, PE stabile (~1015 kJ/mol)
+- **C++ test:** 18/18 passano
+- **Gate:** —
