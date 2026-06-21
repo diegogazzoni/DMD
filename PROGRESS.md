@@ -287,3 +287,25 @@
   - `docs/graph.md` — nuovo grafo completo delle dipendenze (mermaid).
 - **Test C++:** 18/18 passano (erano 20, rimossi 2: test_dmdin, test_production)
 - **Test Python:** tutti i percorsi verificati: config, system builder, run (con/senza progress), H5MD, checkpoint/restart, minimizer
+
+### 2026-06-18 — SHAKE constraints + RATTLE per acqua TIP3P
+
+- **Decisione:** SHAKE esplicito in config.json (`constraint_type: "shake"`). Rimpiazza harmonic bonds+angle per molecole rigide.
+- **File modificati:**
+  - `src/integrate/constraints.h` — nuova API: `apply(SystemData&, const Cell&)`, aggiunto `apply_rattle()`, rimosso `n` field da params
+  - `src/integrate/constraints.cpp` — aggiunto PBC minimum_image, RATTLE (proiezione velocità), fix `n`→`.size()`
+  - `src/sim/simulation_config.h` — aggiunti `constraint_i`, `constraint_j`, `constraint_dist`
+  - `src/sim/simulation_engine.h` — aggiunto `unique_ptr<Constraints> constraints_`
+  - `src/sim/simulation_engine.cpp` — `step()`: SHAKE dopo advance, RATTLE dopo half-kick. `build_simulation()`: crea Constraints se config lo richiede
+  - `python/dmd/core.cpp` — 3 `.def_readwrite` per constraint arrays
+  - `python/dmd/forcefield/merger.py` — `generate_constraints()` produce 3 vincoli per H₂O (2×O–H + 1×H–H)
+  - `python/dmd/forcefield/charmm.py` — fixed angle parser: colonne 5 (non 6), theta0 da gradi a radianti
+  - `python/dmd/system.py` — legge `ff["constraints"]` → cfg arrays
+  - `python/dmd/config.py` — validazione: tipo shake ma nessuna coppia → errore
+  - `tests/unit/integrate/test_constraints.cpp` — test aggiornati per nuova API + test RATTLE
+  - `test_acqua/config.json` — `constraint_type: "shake"`
+  - `test_acqua/run_water_test.py` — usa `generate_constraints()` al posto di bonds+angles
+- **Test C++:** 18/18 passano (incluso test_constraints con RATTLE)
+- **Test acqua SHAKE:** 500 step, dt=1 fs: PE~1015 kJ/mol (solo LJ+Coulomb, niente bonds), geometria perfetta (O–H=0.09572, H–H=0.15139, angolo=104.52°)
+  - Test con dt=2 fs: funziona, ns/day 12.7 vs 6.5, geometria identica
+- **Gate:** —
